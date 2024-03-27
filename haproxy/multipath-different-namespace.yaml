@@ -1,0 +1,243 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mario-ns
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tetris-ns
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: haproxy-ns
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mario
+  namespace: mario-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mario
+  template:
+    metadata:
+      labels:
+        app: mario
+    spec:
+      containers:
+        - name: mario
+          image: pengbai/docker-supermario
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mario
+  namespace: mario-ns
+spec:
+  selector:
+    app: mario
+  ports:
+    - port: 80
+      targetPort: 8080
+  type: ClusterIP
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tetris
+  namespace: tetris-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: tetris
+  template:
+    metadata:
+      labels:
+        app: tetris
+    spec:
+      containers:
+        - name: tetris
+          image: bsord/tetris
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tetris
+  namespace: tetris-ns
+spec:
+  selector:
+    app: tetris
+  ports:
+    - port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: haproxy-config
+  namespace: haproxy-ns
+data:
+  haproxy.cfg: |
+    # HAProxy 전역 설정
+    global
+        log stdout format raw local0
+
+    # 모든 프론트엔드/백엔드를 위한 기본 설정
+    defaults
+        log global
+        option httplog
+        timeout connect 5000ms
+        timeout client 50000ms
+        timeout server 50000ms
+
+    # 들어오는 요청을 위한 프론트엔드
+    frontend http_front
+        bind *:8080
+        mode http
+        stats uri /haproxy?stats
+
+        # 헬스 체크 경로를 위한 ACL
+        acl health_check path /health
+        # 경로가 /mario 또는 /tetris로 시작하는지 확인하는 ACL
+        acl path_mario path_beg /mario
+        acl path_tetris path_beg /tetris
+
+        # /health 경로에 대한 헬스 체크 백엔드 사용
+        use_backend health_check_backend if health_check
+        # 조건에 따라 적절한 백엔드로 요청 라우팅
+        use_backend mario_back if path_mario
+        use_backend tetris_back if path_tetris
+
+    # "mario" 서비스를 제공하는 백엔드
+    backend mario_back
+        mode http
+        balance roundrobin
+        http-request set-path %[path,regsub(^/mario,/)]
+        server mario mario.mario-ns.svc.cluster.local:80 check
+
+    # "tetris" 서비스를 제공하는 백엔드
+    backend tetris_back
+        mode http
+        balance roundrobin
+        http-request set-path %[path,regsub(^/tetris,/)]
+        server tetris tetris.tetris-ns.svc.cluster.local:80 check
+
+    # 헬스 체크를 위한 백엔드 설정
+    backend health_check_backend
+        mode http
+        http-request return status 200 content-type text/plain string "OK"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: haproxy
+  namespace: haproxy-ns
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: haproxy
+  template:
+    metadata:
+      labels:
+        app: haproxy
+    spec:
+      containers:
+      - name: haproxy
+        image: haproxy:latest
+        ports:
+        - containerPort: 8080  # 컨테이너 포트를 8080으로 변경
+        volumeMounts:
+        - name: config-volume
+          mountPath: /usr/local/etc/haproxy/haproxy.cfg
+          subPath: haproxy.cfg
+      volumes:
+      - name: config-volume
+        configMap:
+          name: haproxy-config
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: haproxy
+  namespace: haproxy-ns
+  annotations:
+    cloud.google.com/neg: '{"ingress": true}'
+    cloud.google.com/backend-config: '{"default": "haproxy-backend-config"}'
+spec:
+  ports:
+  - port: 80
+    targetPort: 8080
+  selector:
+    app: haproxy
+  type: ClusterIP
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: games-managed-certificate
+  namespace: haproxy-ns
+spec:
+  domains:
+    - game.somaz.link
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  namespace: haproxy-ns
+  name: ingress-games
+  annotations:
+    kubernetes.io/ingress.global-static-ip-name: "mgmt-gke-game-lb-ip"
+    networking.gke.io/v1beta1.FrontendConfig: "games-frontend-config"
+    networking.gke.io/managed-certificates: "games-managed-certificate"
+    kubernetes.io/ingress.class: "gce"
+spec:
+  rules:
+  - host: game.somaz.link
+    http:
+      paths:
+      - path: /mario
+        pathType: Prefix
+        backend:
+          service:
+            name: haproxy 
+            port:
+              number: 80
+      - path: /tetris
+        pathType: Prefix
+        backend:
+          service:
+            name: haproxy  
+            port:
+              number: 80
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: games-frontend-config
+  namespace: haproxy-ns
+spec:
+  redirectToHttps:
+    enabled: true
+---
+apiVersion: cloud.google.com/v1
+kind: BackendConfig
+metadata:
+  name: haproxy-backend-config
+  namespace: haproxy-ns
+spec:
+  healthCheck:
+    checkIntervalSec: 30
+    timeoutSec: 5
+    healthyThreshold: 1
+    unhealthyThreshold: 2
+    type: HTTP
+    requestPath: /health
+    port: 8080
+
