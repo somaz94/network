@@ -1,0 +1,6 @@
+apiVersion: v2
+name: nginx-gateway-cr
+description: Local chart for NGF Gateway / NginxProxy / ServiceMonitor CRs (tenant-level resources that sit alongside the upstream NGF controller)
+type: application
+version: 0.1.0
+appVersion: "0.1.0"

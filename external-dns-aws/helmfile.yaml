@@ -1,0 +1,22 @@
+repositories:
+  - name: external-dns
+    url: https://kubernetes-sigs.github.io/external-dns/
+
+releases:
+  - name: external-dns
+    namespace: luckyday
+    createNamespace: true   
+    # chart: ./ # Use local chart directory
+    # Use the Remote chart repository external-dns/external-dns
+    chart: external-dns/external-dns
+    version: 1.18.0
+    values:
+      - values/mgmt.yaml
+
+
+# helmDefaults:
+#   wait: true
+#   timeout: 300
+#   atomic: true
+#   cleanupOnFail: true
+

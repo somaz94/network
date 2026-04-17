@@ -1,0 +1,46 @@
+# Defines 11 Gateways and 11 NginxProxy resources
+# Cutover and IP swap are completed by editing the loadBalancerIP line and running `helmfile apply`
+# Current state reflects real IP placement after Phase 6 cutover (2026-04-17)
+gateways:
+  # Main: HTTPS enabled (wildcard-example-tls). 13 core production apps.
+  - name: ngf
+    loadBalancerIP: 192.168.1.55
+    https:
+      enabled: true
+      hostname: "*.example.com"
+      tlsSecretName: wildcard-example-tls
+  # Public a..j: HTTP-only listener. Class split for ApplicationSet and individual apps.
+  - name: ngf-public-a
+    loadBalancerIP: 192.168.1.56
+  - name: ngf-public-b
+    loadBalancerIP: 192.168.1.57
+  - name: ngf-public-c
+    loadBalancerIP: 192.168.1.58
+  - name: ngf-public-d
+    loadBalancerIP: 192.168.1.62
+  - name: ngf-public-e
+    loadBalancerIP: 192.168.1.63
+  - name: ngf-public-f
+    loadBalancerIP: 192.168.1.64
+  - name: ngf-public-g
+    loadBalancerIP: 192.168.1.65
+  - name: ngf-public-h
+    loadBalancerIP: 192.168.1.66
+  - name: ngf-public-i
+    loadBalancerIP: 192.168.1.67
+  - name: ngf-public-j
+    loadBalancerIP: 192.168.1.68
+
+# Common NginxProxy config (applied to all 11 proxies).
+# - externalTrafficPolicy: Cluster ensures kube-proxy forwards across all nodes when an internal pod calls the LB IP
+#   (Changed from Local to Cluster during Phase 6 regression fix on 2026-04-17; see Plan issue 7)
+proxy:
+  replicas: 1
+  externalTrafficPolicy: Cluster
+
+# ServiceMonitor for Prometheus (integrated with kube-prometheus-stack).
+# The NGF 2.x chart does not create a ServiceMonitor, so it is defined directly in this chart.
+serviceMonitor:
+  enabled: true
+  namespace: monitoring
+  prometheusReleaseLabel: kube-prometheus-stack

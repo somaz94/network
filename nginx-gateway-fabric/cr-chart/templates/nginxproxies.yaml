@@ -1,0 +1,16 @@
+{{- range .Values.gateways -}}
+apiVersion: gateway.nginx.org/v1alpha2
+kind: NginxProxy
+metadata:
+  name: {{ .name }}-proxy
+  namespace: {{ $.Release.Namespace }}
+spec:
+  kubernetes:
+    deployment:
+      replicas: {{ $.Values.proxy.replicas }}
+    service:
+      type: LoadBalancer
+      externalTrafficPolicy: {{ $.Values.proxy.externalTrafficPolicy }}
+      loadBalancerIP: {{ .loadBalancerIP | quote }}
+---
+{{ end -}}

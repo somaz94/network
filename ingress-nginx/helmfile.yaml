@@ -1,0 +1,107 @@
+repositories:
+  - name: ingress-nginx
+    url: https://kubernetes.github.io/ingress-nginx
+
+releases:
+  - name: ingress-nginx
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    # -- Version of the ingress-nginx chart to use.
+    # -- This should match the version in the Chart.yaml file.
+    # -- If you want to use a local chart, you can specify the path to the chart directory.
+    version: 4.15.1 # Chart.yaml version reference
+    values:
+      - values/mgmt.yaml
+
+  - name: ingress-nginx-public-a
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-a.yaml
+
+  - name: ingress-nginx-public-b
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-b.yaml
+
+  - name: ingress-nginx-public-c
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-c.yaml
+
+  - name: ingress-nginx-public-d
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-d.yaml
+
+  - name: ingress-nginx-public-e
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-e.yaml
+
+  - name: ingress-nginx-public-f
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-f.yaml
+
+  - name: ingress-nginx-public-g
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-g.yaml
+    
+  - name: ingress-nginx-public-h
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-h.yaml
+
+  - name: ingress-nginx-public-i
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-i.yaml
+
+  - name: ingress-nginx-public-j
+    namespace: ingress-nginx
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    values:
+      - values/mgmt-public-j.yaml
+
+  # # Test deployment
+  # - name: ingress-nginx-test
+  #   namespace: ingress-nginx
+  #   chart: .
+  #   version: 4.12.0-beta.0
+  #   values:
+  #     - values/mgmt.yaml  # Reuse default settings
+  #     # - values/mgmt-public-test.yaml  # Create new settings file
+# Hooks to ensure proper installation and upgrades
+hooks:
+  - events: ["presync"]
+    showlogs: true
+    command: "kubectl"
+    args:
+      - "create"
+      - "namespace"
+      - "ingress-nginx"
+      - "--dry-run=client"
+      - "-o"
+      - "yaml"
+      - "||"
+      - "true" 

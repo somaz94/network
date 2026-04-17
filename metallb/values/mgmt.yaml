@@ -1,0 +1,17 @@
+# =============================================================================
+# MetalLB Custom Values — ServiceMonitor for Prometheus
+# =============================================================================
+prometheus:
+  # Required for ServiceMonitor RBAC
+  serviceAccount: kube-prometheus-stack-prometheus
+  namespace: monitoring
+
+  serviceMonitor:
+    enabled: true
+    speaker:
+      additionalLabels:
+        release: kube-prometheus-stack
+    controller:
+      additionalLabels:
+        release: kube-prometheus-stack
+    jobLabel: "app.kubernetes.io/name"

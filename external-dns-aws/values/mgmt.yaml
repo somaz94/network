@@ -1,0 +1,78 @@
+# External-DNS Route53 Configuration
+image:
+  repository: registry.k8s.io/external-dns/external-dns
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  annotations:
+    # EKS IAM Role for Service Account (IRSA), replace with the actual Role ARN
+    eks.amazonaws.com/role-arn: arn:aws:iam::010339071704:role/external-dns-role
+
+# Deploy to the system node group
+nodeSelector:
+  eks.amazonaws.com/nodegroup: TestNodegroupSystemNodeGrou-2DdNHUV7Y6Ua
+
+# Pod security settings
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 65534
+
+securityContext:
+  privileged: false
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  capabilities:
+    drop: ["ALL"]
+
+rbac:
+  create: true
+
+# Resource limits
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+# Logging settings
+logLevel: info
+logFormat: text
+
+# # Monitor only the luckyday namespace
+# namespaced: true
+
+# DNS update interval
+interval: 5m
+
+# Resource types to monitor
+sources:
+  - service
+  - ingress
+
+# DNS record management policy
+policy: upsert-only # Policy description added; create if record does not exist, update if it does
+
+# TXT record registry settings
+registry: txt
+txtOwnerId: "luckyday-external-dns"
+txtPrefix: "external-dns-"
+
+# Domain filter, manage only luckyday.secondary-projectsvc.com
+domainFilters:
+  - luckyday.secondary-projectsvc.com
+
+# AWS Route53 provider
+provider:
+  name: aws
+
+# External-DNS extra settings
+extraArgs:
+  - --aws-zone-type=public
+  - --aws-prefer-cname
+  - --annotation-filter=external-dns.luckyday.kubernetes.io/hostname

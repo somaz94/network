@@ -1,0 +1,25 @@
+repositories:
+  - name: metallb
+    url: https://metallb.github.io/metallb
+
+releases:
+  - name: metallb
+    namespace: metallb
+    createNamespace: true
+    chart: metallb/metallb
+    version: 0.15.3
+    wait: true
+    timeout: 300
+    values:
+      - values/mgmt.yaml
+
+# Apply MetalLB CRD config (postsync, runs after controller is ready)
+# Resolve webhook timing issue by applying config after Pod becomes ready with wait true
+hooks:
+  - events: ["postsync"]
+    showlogs: true
+    command: "kubectl"
+    args:
+      - "apply"
+      - "-f"
+      - "metallb-config.yaml"

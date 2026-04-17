@@ -1,0 +1,24 @@
+global:
+  image:
+    # -- Registry host to pull images from.
+    registry: registry.k8s.io
+controller:
+  ingressClassResource:
+    name: nginx-public-a  # Distinct name for differentiation
+    enabled: true
+    default: false     # Explicitly mark as non-default controller
+    controllerValue: "k8s.io/ingress-nginx-public-a"  # Distinct controllerValue for differentiation
+  service:
+    # -- Enable controller services or not. This does not influence the creation of either the admission webhook or the metrics service.
+    enabled: true
+    type: LoadBalancer
+    loadBalancerIP: "192.168.1.56"
+  # ServiceMonitor (Prometheus metrics)
+  metrics:
+    enabled: true
+    serviceMonitor:
+      enabled: true
+      namespace: monitoring
+      interval: 30s
+      additionalLabels:
+        release: kube-prometheus-stack

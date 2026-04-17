@@ -1,0 +1,110 @@
+# NGINX Gateway Fabric (NGF)
+#
+# Release 구조 (2026-04-17 refactor):
+#   1. nginx-gateway-fabric  — OCI upstream chart (NGF 컨트롤러)
+#   2. nginx-gateway-cr      — local chart (./cr-chart) 로 11 Gateway + 11 NginxProxy + ServiceMonitor
+#                              (이전 manifests/ 디렉토리를 helm template 으로 흡수 → helmfile diff 커버)
+#
+# - Gateway API CRDs 는 공식 standard-install.yaml (단일 YAML URL, git clone 불필요).
+#   NGF 버전이 pin 한 Gateway API 버전은 NGF repo kustomization.yaml 에서 curl 로 자동 감지.
+# - NGF 자체 CRDs(NginxProxy 등)는 chart의 crds/ 에 포함. helm install 시 자동 설치되지만
+#   helm diff (dry-run) 단계엔 없어서 prepare hook 이 helm pull 로 선설치 → chicken-and-egg 회피.
+# - cr-chart release 는 `needs: [nginx-gateway-fabric]` 로 CRD 준비 후에만 apply → 의존성 보장.
+#
+# 라이프사이클 (event 기반 destroy/apply 자연 분리):
+#   helmfile apply   → prepare(CRDs) → release1 install → release2 install (cr-chart)
+#   helmfile destroy → prepare(CRDs; idempotent) → release2 uninstall → release1 uninstall
+#                      → postuninstall(CRDs + namespace 제거)
+#   기존 postsync/preuninstall hook(raw manifest apply/delete)은 cr-chart release 로 대체됨.
+#
+# Single source of truth: Chart.yaml (NGF version/appVersion)
+
+{{- $chart := readFile "Chart.yaml" | fromYaml }}
+{{- $chartVersion := $chart.version }}
+{{- $appVersion   := $chart.appVersion }}
+
+repositories: []  # OCI chart
+
+releases:
+  - name: nginx-gateway-fabric
+    namespace: nginx-gateway
+    createNamespace: true
+    chart: oci://ghcr.io/nginx/charts/nginx-gateway-fabric
+    version: {{ $chartVersion | quote }}
+    wait: true
+    timeout: 300
+    values:
+      - values/mgmt.yaml
+
+    hooks:
+      # prepare: 모든 명령 전 실행 — CRDs 선설치 (chicken-and-egg 회피).
+      # destroy 시에도 실행되지만 idempotent apply라 2-3초 낭비 수준.
+      - events: ["prepare"]
+        showlogs: true
+        command: "bash"
+        args:
+          - "-c"
+          - |
+            set -e
+            echo "=== prepare hook: installing CRDs ==="
+
+            GW_API_VER=$(curl -fsSL \
+              "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/v{{ $appVersion }}/config/crd/gateway-api/standard/kustomization.yaml" \
+              | grep -oE 'ref=v[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/ref=v//')
+            if [ -z "$GW_API_VER" ]; then
+              echo "ERROR: could not detect Gateway API version from NGF v{{ $appVersion }}"
+              exit 1
+            fi
+            echo "Gateway API version pinned by NGF v{{ $appVersion }}: $GW_API_VER"
+
+            # Gateway API standard channel CRDs
+            kubectl apply --server-side --force-conflicts \
+              -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GW_API_VER}/standard-install.yaml"
+
+            # NGF 자체 CRDs (chart crds/)
+            tmp=$(mktemp -d)
+            trap 'rm -rf "$tmp"' EXIT
+            helm pull oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+              --version {{ $chartVersion }} --untar --untardir "$tmp"
+            kubectl apply --server-side --force-conflicts -f "$tmp/nginx-gateway-fabric/crds/"
+
+            echo "=== CRDs ready ==="
+
+      # postuninstall: destroy 전용 — helm uninstall 직후 CRDs + namespace 제거
+      - events: ["postuninstall"]
+        showlogs: true
+        command: "bash"
+        args:
+          - "-c"
+          - |
+            set +e
+            echo "=== postuninstall hook: removing CRDs + namespace ==="
+
+            # NGF 자체 CRDs
+            tmp=$(mktemp -d)
+            trap 'rm -rf "$tmp"' EXIT
+            helm pull oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
+              --version {{ $chartVersion }} --untar --untardir "$tmp"
+            kubectl delete --ignore-not-found=true -f "$tmp/nginx-gateway-fabric/crds/"
+
+            # Gateway API CRDs (auto-detected)
+            GW_API_VER=$(curl -fsSL \
+              "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/v{{ $appVersion }}/config/crd/gateway-api/standard/kustomization.yaml" \
+              | grep -oE 'ref=v[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/ref=v//')
+            if [ -n "$GW_API_VER" ]; then
+              kubectl delete --ignore-not-found=true \
+                -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GW_API_VER}/standard-install.yaml"
+            fi
+
+            # Namespace
+            kubectl delete namespace nginx-gateway --ignore-not-found=true
+
+            echo "=== postuninstall done ==="
+
+  # Tenant-level CRs (Gateway/NginxProxy/ServiceMonitor). Local chart.
+  # needs 로 CRDs + controller 준비 후에만 apply → 순서 보장.
+  - name: nginx-gateway-cr
+    namespace: nginx-gateway
+    chart: ./cr-chart
+    needs:
+      - nginx-gateway/nginx-gateway-fabric
