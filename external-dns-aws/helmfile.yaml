@@ -9,7 +9,7 @@ releases:
     # chart: ./ # Use local chart directory
     # Use the Remote chart repository external-dns/external-dns
     chart: external-dns/external-dns
-    version: 1.18.0
+    version: 1.20.0
     values:
       - values/mgmt.yaml
 
