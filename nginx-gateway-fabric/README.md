@@ -10,19 +10,24 @@ Maps the 11 IngressClasses (`nginx`, `nginx-public-a~j`) 1:1 to 11 GatewayClasse
 
 ```
 nginx-gateway-fabric/
-├── Chart.yaml                   # NGF chart version tracking (version + appVersion = single source)
-├── helmfile.yaml.gotmpl         # helmfile go template (reads Chart.yaml)
+├── Chart.yaml                   # NGF upstream chart version (version + appVersion = single source)
+├── helmfile.yaml.gotmpl         # Two releases (controller + cr) — auto-reads each Chart.yaml
 ├── values.yaml                  # Upstream NGF defaults (managed by upgrade.sh, placeholder)
 ├── values/
-│   └── mgmt.yaml                # Controller custom settings (replicas, metrics, etc.)
-├── manifests/                   # Raw CRs applied via postsync hook
-│   ├── gatewayclasses.yaml      # 11 GatewayClass
-│   ├── gateways.yaml            # 11 Gateway (Phase 1: HTTP listener only)
-│   └── nginxproxies.yaml        # 11 NginxProxy (pins LoadBalancer IP)
-├── upgrade.sh                   # external-oci canonical (auto-detects latest via GitHub Releases API)
+│   ├── mgmt.yaml                # NGF controller custom settings (replicas, metrics, etc.)
+│   └── mgmt-cr.yaml             # cr release env values (11 Gateway + NginxProxy + ServiceMonitor)
+├── cr-chart/                    # Mirror of external chart metadata (somaz94/nginx-gateway-cr)
+│   ├── Chart.yaml               # Version pin (helmfile readFile reference)
+│   ├── values.yaml              # External chart defaults reference (actual values: values/mgmt-cr.yaml)
+│   └── values.schema.json       # JSON Schema — local IDE / CI validation
+├── upgrade.sh                   # NGF controller upgrade (external-oci, GitHub Releases API)
 ├── README.md / README-en.md
 └── backup/
 ```
+
+> **Chart sources**: the NGF controller comes from OCI (`oci://ghcr.io/nginx/charts/nginx-gateway-fabric`)
+> and the cr release from a Helm repo (`https://charts.somaz.blog`). Both releases pull the chart
+> remotely; only metadata (Chart.yaml / values / schema) is mirrored locally.
 
 <br/>
 
@@ -35,12 +40,12 @@ nginx-gateway-fabric/
 
 ### Single Source of Truth
 
-`Chart.yaml`'s `version` and `appVersion` are the single source of truth.
+Each release's chart version comes from a local `Chart.yaml`, read via `readFile` in the helmfile go template. Bump the Chart.yaml only — helmfile.yaml.gotmpl never needs editing.
 
-- `version` (chart version) → `helmfile.yaml.gotmpl` `releases[].version`
-- `appVersion` (NGF software = git tag) → `helmfile.yaml.gotmpl` hook URL `?ref=v...`
-
-helmfile reads both via `readFile "Chart.yaml" | fromYaml`. **Bump Chart.yaml only — helmfile.yaml.gotmpl needs no edit; everything stays in sync.**
+| Release | Chart.yaml location | Keys used |
+|---|---|---|
+| `nginx-gateway-fabric` (controller) | `Chart.yaml` (root) | `version` → `releases[].version`; `appVersion` → hook URL `?ref=v...` |
+| `nginx-gateway-cr` (CR) | `cr-chart/Chart.yaml` | `version` → `releases[].version` |
 
 <br/>
 
@@ -65,22 +70,31 @@ helmfile reads both via `readFile "Chart.yaml" | fromYaml`. **Bump Chart.yaml on
 
 ## Quick Start
 
+Apply both releases at once:
+
 ```bash
 helmfile lint
 helmfile diff
-
-# Apply (3 stages auto-executed):
-#   1. presync: Gateway API standard CRDs (pinned by NGF appVersion)
-#   2. release: NGF Helm chart
-#   3. postsync: GatewayClass / Gateway / NginxProxy from manifests/
-helmfile apply
-
-helmfile destroy
-# Note: manifests/ resources and Gateway API CRDs aren't owned by the helm release;
-# clean up separately:
-#   kubectl delete -f manifests/
-#   kubectl delete -f https://github.com/nginx/nginx-gateway-fabric/config/crd/gateway-api/standard?ref=v<APP_VER>
+helmfile apply       # prepare hook (CRDs) → controller release → cr release in order
+helmfile destroy     # reverse → postuninstall hook also removes CRDs / namespace
 ```
+
+### Targeting a specific release (selector)
+
+Most common scenario: re-apply only the cr release after editing `values/mgmt-cr.yaml`.
+
+```bash
+# cr (Gateway / NginxProxy / ServiceMonitor) only
+helmfile --selector name=nginx-gateway-cr diff
+helmfile --selector name=nginx-gateway-cr apply
+
+# controller only (after an NGF version upgrade)
+helmfile --selector name=nginx-gateway-fabric diff
+helmfile --selector name=nginx-gateway-fabric apply
+```
+
+> Thanks to `needs:`, calling cr release alone with a selector still validates that the controller
+> is installed; helmfile will not auto-install it (apply the controller release explicitly first).
 
 <br/>
 
@@ -165,7 +179,7 @@ For the exact Gateway API version used, see `https://github.com/nginx/nginx-gate
 | Symptom | Resolution |
 |---------|-----------|
 | `Gateway PROGRAMMED=False, ListenerInvalidCertificateRef` | Phase 1 has only HTTP listeners; n/a. After HTTPS is added in Phase 3+, verify the cert Secret |
-| `NginxProxy not found` | Confirm the `manifests/` postsync hook ran. `kubectl get nginxproxy -n nginx-gateway` |
+| `NginxProxy not found` | Confirm the `nginx-gateway-cr` release was applied. `kubectl get nginxproxy -n nginx-gateway` (expect 11) |
 | `LoadBalancer Service Pending` | Check MetalLB pool (`kubectl -n metallb get ipaddresspool`). Must contain the requested IP within `.55-58, .62-75` |
 | LB IP collision in Phase 1 | The IP is currently held by ingress-nginx. Switch to a temp IP (`.69-.75`) or scale down the conflicting ingress-nginx release first |
 | `helmfile.yaml.gotmpl` not recognized | Requires helmfile 0.140+. Check with `helmfile --version` |

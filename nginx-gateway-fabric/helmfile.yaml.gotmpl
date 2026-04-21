@@ -17,13 +17,27 @@
 #                      → postuninstall(CRDs + namespace 제거)
 #   기존 postsync/preuninstall hook(raw manifest apply/delete)은 cr-chart release 로 대체됨.
 #
-# Single source of truth: Chart.yaml (NGF version/appVersion)
+# Single source of truth:
+#   - Chart.yaml         → NGF upstream chart version/appVersion
+#   - cr-chart/Chart.yaml → cr-chart (Gateway/NginxProxy/ServiceMonitor) version pin
+# / Single source of truth:
+# /   - Chart.yaml         → NGF upstream 차트 version/appVersion
+# /   - cr-chart/Chart.yaml → cr-chart (Gateway/NginxProxy/ServiceMonitor) 버전 pin
 
 {{- $chart := readFile "Chart.yaml" | fromYaml }}
 {{- $chartVersion := $chart.version }}
 {{- $appVersion   := $chart.appVersion }}
 
-repositories: []  # OCI chart
+{{- $crChart := readFile "cr-chart/Chart.yaml" | fromYaml }}
+{{- $crChartVersion := $crChart.version }}
+
+repositories:
+  # External chart source. To customize the chart itself (templates / values schema / new fields),
+  # fork charts/nginx-gateway-cr/ from https://github.com/somaz94/helm-charts and pin to your fork.
+  # / 외부 차트 소스. 차트 자체(templates / values schema / 신규 필드)를 커스터마이징하려면
+  # / https://github.com/somaz94/helm-charts 의 charts/nginx-gateway-cr/ 를 fork 후 해당 fork 로 pin.
+  - name: somaz94
+    url: https://charts.somaz.blog
 
 releases:
   - name: nginx-gateway-fabric
@@ -101,10 +115,15 @@ releases:
 
             echo "=== postuninstall done ==="
 
-  # Tenant-level CRs (Gateway/NginxProxy/ServiceMonitor). Local chart.
-  # needs 로 CRDs + controller 준비 후에만 apply → 순서 보장.
+  # Tenant-level CRs (Gateway/NginxProxy/ServiceMonitor).
+  # / 테넌트 CR (Gateway/NginxProxy/ServiceMonitor).
+  # needs ensures CRDs + controller are ready before apply → ordering guaranteed.
+  # / needs 로 CRDs + controller 준비 후에만 apply → 순서 보장.
   - name: nginx-gateway-cr
     namespace: nginx-gateway
-    chart: ./cr-chart
+    chart: somaz94/nginx-gateway-cr
+    version: {{ $crChartVersion | quote }}
     needs:
       - nginx-gateway/nginx-gateway-fabric
+    values:
+      - values/mgmt-cr.yaml

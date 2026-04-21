@@ -1,0 +1,103 @@
+# Tenant-level NGF custom resources (Gateway / NginxProxy / ServiceMonitor) for the mgmt cluster.
+#
+#
+# Section order mirrors `cr-chart/values.yaml` for cross-reference.
+# Only sections we override are present here; others fall back to chart defaults.
+#
+#
+#
+# Chart source pinned in helmfile.yaml.gotmpl. To customize the chart itself
+# (templates / values schema / new fields), fork charts/nginx-gateway-cr/ from
+# https://github.com/somaz94/helm-charts and update the helmfile to point at the fork.
+#
+#
+#
+#
+# Cutover/IP swap is completed by editing the loadBalancerIP line and running `helmfile apply`.
+#
+#
+# Current state reflects real IP placement after Phase 6 cutover (2026-04-17).
+#
+
+# ---------------------------------------------------------------------------
+# NginxProxy defaults
+# ---------------------------------------------------------------------------
+# Common NginxProxy config (applied to all 11 proxies; per-gateway override
+# possible under gateways[].proxy if needed).
+#
+#
+# externalTrafficPolicy: Cluster ensures kube-proxy forwards across all nodes when an
+# internal pod calls the LB IP.
+#
+# (Changed from Local to Cluster during Phase 6 regression fix on 2026-04-17; see Plan issue 7.)
+#
+proxy:
+  replicas: 1
+  service:
+    externalTrafficPolicy: Cluster
+
+# ---------------------------------------------------------------------------
+# Gateways
+# ---------------------------------------------------------------------------
+# 11 Gateways + 11 matching NginxProxies (`<name>-proxy` auto-named by the chart).
+#
+gateways:
+  # Main: HTTPS enabled (wildcard-example-tls). 13 core production apps.
+  #
+  - name: ngf
+    loadBalancerIP: 192.168.1.55
+    https:
+      enabled: true
+      hostname: "*.example.com"
+      tlsSecretName: wildcard-example-tls
+
+  # Public a..j: HTTP-only listener. Class split for ApplicationSet and individual apps.
+  #
+  - name: ngf-public-a
+    loadBalancerIP: 192.168.1.56
+  - name: ngf-public-b
+    loadBalancerIP: 192.168.1.57
+  - name: ngf-public-c
+    loadBalancerIP: 192.168.1.58
+  - name: ngf-public-d
+    loadBalancerIP: 192.168.1.62
+  - name: ngf-public-e
+    loadBalancerIP: 192.168.1.63
+  - name: ngf-public-f
+    loadBalancerIP: 192.168.1.64
+  - name: ngf-public-g
+    loadBalancerIP: 192.168.1.65
+  - name: ngf-public-h
+    loadBalancerIP: 192.168.1.66
+  - name: ngf-public-i
+    loadBalancerIP: 192.168.1.67
+  - name: ngf-public-j
+    loadBalancerIP: 192.168.1.68
+
+# ---------------------------------------------------------------------------
+# ServiceMonitors (Prometheus Operator / kube-prometheus-stack)
+# ---------------------------------------------------------------------------
+# Disabled — NGF 2.x exposes /metrics only on the controller Pod, not the Service,
+# so a ServiceMonitor finds 0 targets. Use podMonitor (below) instead.
+#
+#
+serviceMonitor:
+  controller:
+    enabled: false
+  dataplane:
+    enabled: false
+
+# ---------------------------------------------------------------------------
+# PodMonitors (Prometheus Operator / kube-prometheus-stack)
+# ---------------------------------------------------------------------------
+# controller: scrape NGF control-plane Pod directly (port 'metrics' = 9113).
+#
+# dataplane: per-nginx-pod metrics (Phase 2, separate change).
+#
+podMonitor:
+  namespace: monitoring
+  releaseLabel: kube-prometheus-stack
+  controller:
+    enabled: true
+  dataplane:
+    enabled: false
