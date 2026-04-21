@@ -124,7 +124,13 @@ detect_template() {
   elif grep -q '^GITHUB_REPO=' "$f"; then
     echo "ansible-github-release"
   elif grep -q '^VERSION_SOURCE=' "$f"; then
-    echo "local-cr-version"
+    # local-cr-version owns Chart.yaml (and therefore has MIRROR_CHART_VERSION=);
+    # external-oci-cr-version consumes an upstream OCI chart and has no Chart.yaml.
+    if grep -q '^MIRROR_CHART_VERSION=' "$f"; then
+      echo "local-cr-version"
+    else
+      echo "external-oci-cr-version"
+    fi
   elif grep -q '^CUSTOM_TEMPLATES=' "$f"; then
     echo "local-with-templates"
   elif grep -q 'Update image tags in values files' "$f"; then

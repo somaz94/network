@@ -41,8 +41,11 @@ scripts/upgrade-sync/
 └── templates/
     ├── external-standard.sh           # external chart (helm repo) + default flow
     ├── external-with-image-tag.sh     # external + values image tag auto-update
+    ├── external-oci.sh                # external OCI chart + GitHub Releases tracking
+    ├── external-oci-cr-version.sh     # external OCI chart consumer (CR wrapper) + values.version tracking
     ├── local-with-templates.sh        # local chart (Chart.yaml in repo) + custom templates
-    └── local-cr-version.sh            # local chart (CR wrapper) + values.version field tracking
+    ├── local-cr-version.sh            # local chart (CR wrapper) + values.version + Chart.yaml.appVersion
+    └── ansible-github-release.sh     # Ansible-deployed component + GitHub Releases tracking
 ```
 
 <br/>
@@ -227,7 +230,7 @@ An awk counter tracks markers to find precise boundaries.
 
 New variants must follow the same convention (e.g., `external-multi-release.sh`, `local-bare.sh`).
 
-### Current canonicals (4)
+### Current canonicals (7)
 
 #### 1. [external-standard.sh](templates/external-standard.sh) — external helm repo chart (most common)
 
@@ -300,9 +303,41 @@ New variants must follow the same convention (e.g., `external-multi-release.sh`,
   - Does not fetch Chart.yaml from upstream (we are the sole owner)
   - Does not sync `templates/` (CR definitions are owned locally)
   - Backup targets: `Chart.yaml` + `$VALUES_FILE` only
-- **2 charts**: `elasticsearch` (ECK CR), `kibana` (ECK CR)
+- **0 charts (historical)**: `elasticsearch` and `kibana` (ECK CR) previously used this template; after migrating to OCI charts they now use `external-oci-cr-version`. Still available for operator-wrapper charts that keep a local Chart.yaml.
 
-#### 5. [ansible-github-release.sh](templates/ansible-github-release.sh) — Ansible-deployed (non-Helm) component + GitHub Releases tracking
+#### 5. [external-oci-cr-version.sh](templates/external-oci-cr-version.sh) — external OCI chart consumer (CR wrapper) + version field tracking
+
+- **Use**: Consumer components that deploy CRs via a **public OCI chart** (e.g. `oci://ghcr.io/...`). The consumer does NOT own `Chart.yaml` or `templates/`; those live in a separate publishing repo (e.g. `somaz94/helm-charts`). Only `helmfile.yaml` (with the chart pinned by version) and `values/*.yaml` are managed here.
+- **vs `local-cr-version` (key differences)**:
+  - No `Chart.yaml` / `templates/` (chart lives upstream)
+  - `MIRROR_CHART_VERSION` removed (no local Chart.yaml to mirror)
+  - Backup targets: `$VALUES_FILE` only
+  - No Chart.yaml restore path on rollback
+  - Step 1 prints `helmfile.yaml.version` informationally ("bump manually if needed")
+- **Design intent**: **Separate the management concerns** of Stack/component version (image tag) and OCI chart version (template version). The chart pin is a manual bump (operator judgment), the Stack version is auto-tracked by this script.
+- **Flow**: 7 steps (read current → health check → fetch latest → **verify container image** → compatibility + dependency + major bump warning → backup `$VALUES_FILE` → update `$VALUES_FILE.<VERSION_KEY>`)
+- **Extra variables** (same as local-cr-version, **except `MIRROR_CHART_VERSION` is removed**):
+  - `COMPONENT_LABEL`, `VERSION_SOURCE`, `VERSION_SOURCE_ARG`
+  - `VALUES_FILE`, `VERSION_KEY`, `MAJOR_PIN`, `CHANGELOG_URL`
+  - `CONTAINER_IMAGE`
+  - `CR_WEBHOOK_NAME`, `CR_OPERATOR_NS`, `CR_OPERATOR_STS`, `CR_OPERATOR_CHART_DIR` (downgrade webhook auto-handling)
+  - `DEPENDENCY_CR_KIND`, `DEPENDENCY_CR_NAME` (e.g., Kibana → Elasticsearch version constraint)
+- **Safety features** (shared with local-cr-version):
+  - Image registry verification with fallback auto-search
+  - Downgrade detection + operator webhook auto-handling
+  - Helm failed-release recovery
+  - Operator / CR Ready waits
+- **OCI chart pin bump lives outside this script**: edit `helmfile.yaml` manually → `helmfile diff` → `helmfile apply`. Chart release cadence (~quarterly) differs from Stack release cadence (~monthly), and chart bumps may carry schema changes, so manual review is safer than automation.
+- **2 charts**: `observability/logging/elasticsearch` (elasticsearch-eck OCI chart consumer), `observability/logging/kibana` (kibana-eck OCI chart consumer)
+
+#### 6. [external-oci.sh](templates/external-oci.sh) — external OCI chart + GitHub Releases tracking
+
+- **Use**: OCI-registry-distributed charts where the chart version itself needs tracking. Bumps `helmfile.yaml.version` via GitHub Releases API.
+- **Differences vs external-standard**: `helm search repo` is unavailable for OCI → use GitHub Releases instead.
+- **Extra variables**: `HELM_CHART` (oci://... URL), `GITHUB_REPO` (owner/repo), `GITHUB_TAG_PREFIX`
+- **Charts used**: currently 0 (reserved)
+
+#### 7. [ansible-github-release.sh](templates/ansible-github-release.sh) — Ansible-deployed (non-Helm) component + GitHub Releases tracking
 
 - **Use**: Components **deployed via Ansible**, not Helm, where the version lives in a single YAML file (e.g. `group_vars/all.yml`) and the upstream source is a GitHub Releases feed. No `Chart.yaml` / `helmfile.yaml`.
 - **Flow**: 5 steps (current → fetch latest from GitHub → diff preview + major-bump warning → backup → update VERSION_FILE)
@@ -443,6 +478,7 @@ Each template uses the same upstream lookup logic its `upgrade.sh` already relie
 | `local-with-templates` (helm mode) | `Chart.yaml` → `version` | `helm search repo <HELM_CHART>` (top entry) |
 | `local-with-templates` (git mode, `CHART_GIT_REPO` set) | `Chart.yaml` → `version` | Highest semver tag from `git ls-remote --tags` |
 | `local-cr-version` | `<VALUES_FILE>` → `<VERSION_KEY>` | `VERSION_SOURCE` feed (e.g. elastic-artifacts), respecting `MAJOR_PIN` |
+| `external-oci-cr-version` | `<VALUES_FILE>` → `<VERSION_KEY>` | `VERSION_SOURCE` feed, respecting `MAJOR_PIN` (no Chart.yaml) |
 | `ansible-github-release` | `<VERSION_FILE>` → `<VERSION_KEY>` | GitHub Releases API (`<GITHUB_REPO>`), respecting `MAJOR_PIN` |
 
 <br/>
@@ -464,7 +500,7 @@ Running 'helm repo update'...
   UPDATE   external-standard         9.4.15           9.5.0            cicd/argo-cd/upgrade.sh
   OK       external-standard         0.87.1           0.87.1           cicd/gitlab-runner/upgrade.sh
   ...
-  UPDATE   local-cr-version          9.0.0            9.4.0            observability/logging/elasticsearch/upgrade.sh
+  UPDATE   external-oci-cr-version   9.0.0            9.4.0            observability/logging/elasticsearch/upgrade.sh
   ...
 
 Summary: OK=15  UPDATE=7  ERROR=0  (total=22)
@@ -508,7 +544,7 @@ STATUS column:
 
 - `helm` (for helm-repo lookups)
 - `git` (for git-tags lookups, used by `local-with-templates` in git mode)
-- `curl`, `python3` (for version-source lookups used by `local-cr-version`)
+- `curl`, `python3` (for version-source lookups — used by `local-cr-version`, `external-oci-cr-version`, `ansible-github-release`)
 
 Same portability as sync.sh: works on macOS bash 3.2 and Linux bash 4+.
 

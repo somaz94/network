@@ -17,6 +17,7 @@ set -euo pipefail
 #   external-standard        -> helm search repo
 #   external-with-image-tag  -> helm search repo
 #   external-oci             -> GitHub Releases API (GITHUB_REPO)
+#   external-oci-cr-version  -> VERSION_SOURCE feed (VALUES_FILE-backed CR version)
 #   local-with-templates     -> helm search repo OR git ls-remote --tags
 #                               (git mode when CHART_GIT_REPO is non-empty)
 #   local-cr-version         -> VERSION_SOURCE feed (e.g. elastic-artifacts)
@@ -392,7 +393,10 @@ while IFS= read -r f; do
         fi
       fi
       ;;
-    local-cr-version)
+    local-cr-version|external-oci-cr-version)
+      # Both templates track a CR/component version stored in VALUES_FILE and
+      # query VERSION_SOURCE upstream. external-oci-cr-version has no Chart.yaml
+      # (chart lives in a publisher repo), so there's nothing else to read.
       if [ -n "$VALUES_FILE" ] && [ -f "$chart_dir/$VALUES_FILE" ] && [ -n "$VERSION_KEY" ]; then
         current=$(read_yaml_value "$chart_dir/$VALUES_FILE" "$VERSION_KEY")
       fi
