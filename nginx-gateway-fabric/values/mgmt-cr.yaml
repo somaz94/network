@@ -92,7 +92,13 @@ serviceMonitor:
 # ---------------------------------------------------------------------------
 # controller: scrape NGF control-plane Pod directly (port 'metrics' = 9113).
 #
-# dataplane: per-nginx-pod metrics (Phase 2, separate change).
+# dataplane: per-nginx-pod metrics on port 'metrics' = 9113 (nginx-agent OTEL native export).
+#
+# Exposed metric families: nginx_http_requests_total / nginx_http_connections_total /
+# nginx_http_connection_count_connections (outcome=ACTIVE|READING|WRITING|WAITING|ACCEPTED|HANDLED) +
+# agent system_* (cpu/memory/network). No histograms (latency p95/p99) or status-code labels.
+#
+# / nginx_http_connection_count_connections (outcome=ACTIVE|READING|WRITING|WAITING|ACCEPTED|HANDLED) +
 #
 podMonitor:
   namespace: monitoring
@@ -100,4 +106,25 @@ podMonitor:
   controller:
     enabled: true
   dataplane:
-    enabled: false
+    enabled: true
+    # Chart default selector (app.kubernetes.io/name=nginx-gateway-fabric) matches only the
+    # controller Pod in NGF 2.x — data-plane Pods carry per-gateway name labels
+    # (ngf-ngf, ngf-public-a, ...). Override with Gateway-API's gateway-name label (present
+    # on every data-plane Pod, absent on the controller).
+    #
+    #
+    #
+    selector:
+      # Null-override chart default matchLabels — Helm deep-merges maps, and `{}` does NOT
+      # drop sub-keys; only explicit `key: null` removes them. Without this, the chart
+      # default (app.kubernetes.io/name=nginx-gateway-fabric) is AND-combined with
+      # matchExpressions below and the intersection is empty (nothing scraped).
+      #
+      #
+      #
+      #
+      matchLabels:
+        app.kubernetes.io/name: null
+      matchExpressions:
+        - key: gateway.networking.k8s.io/gateway-name
+          operator: Exists
