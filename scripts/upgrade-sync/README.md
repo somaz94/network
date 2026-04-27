@@ -270,10 +270,9 @@ New variants must follow the same convention (e.g., `external-multi-release.sh`,
 - **Extra variables**: `CUSTOM_TEMPLATES`, `CUSTOM_POD_PATCH`, `EXTRA_DIRS`
 - **Two upstream source modes** (selected via CONFIG block):
   - **helm repo mode** (default): set `HELM_REPO_NAME`/`HELM_REPO_URL`/`HELM_CHART`, leave `CHART_GIT_REPO` empty
-  - **git source mode**: set `CHART_GIT_REPO`/`CHART_GIT_PATH` (for charts not published to any helm repo, e.g., rancher/local-path-provisioner). Latest version is auto-detected from git tags and the chart is fetched via git clone.
-- **3 charts**:
+  - **git source mode**: set `CHART_GIT_REPO`/`CHART_GIT_PATH` (for charts not published to any helm repo). Latest version is auto-detected from git tags and the chart is fetched via git clone.
+- **2 charts**:
   - `fluent-bit`, `fluent-bit-aws` (helm repo mode)
-  - `local-path-provisioner` (git source mode)
 
 #### 4. [local-cr-version.sh](templates/local-cr-version.sh) — local chart (CR wrapper) + version field tracking
 
@@ -327,7 +326,13 @@ New variants must follow the same convention (e.g., `external-multi-release.sh`,
   - Downgrade detection + operator webhook auto-handling
   - Helm failed-release recovery
   - Operator / CR Ready waits
-- **OCI chart pin bump lives outside this script**: edit `helmfile.yaml` manually → `helmfile diff` → `helmfile apply`. Chart release cadence (~quarterly) differs from Stack release cadence (~monthly), and chart bumps may carry schema changes, so manual review is safer than automation.
+- **OCI chart pin automation (`--check-chart` / `--upgrade-chart`)**: on top of Stack version tracking, the script can also track `helmfile.yaml.version` (the publisher's chart release tag). Setting all three CONFIG variables below activates the two sub-commands:
+  - `CHART_SOURCE_TYPE`: currently only `"github-releases"` is supported (empty disables chart-pin tracking)
+  - `CHART_SOURCE_REPO`: `"<owner>/<repo>"` that publishes the chart (e.g. `"somaz94/helm-charts"`)
+  - `CHART_NAME`: release tag prefix (e.g. `"elasticsearch-eck"` → version is extracted from tags like `elasticsearch-eck-0.1.2`)
+- **`--check-chart`**: compares current pin with the latest publisher release (read-only). Prints release notes URL and suggests next commands if an update is available.
+- **`--upgrade-chart [--chart-version X.Y.Z] [--dry-run]`**: `helm pull`s both the current and target charts into a scratch directory, runs `helm template` on each with the active values file, and shows a unified diff of the rendered manifests. On confirmation, backs up `helmfile.yaml` to `backup/<TIMESTAMP>-chart/` and bumps the pin. Values-schema breakage surfaces as a `helm template` failure on the target chart before any file is touched.
+- **Chart vs Stack backups**: Stack upgrades write `backup/<TIMESTAMP>/<values-file>`; chart upgrades write `backup/<TIMESTAMP>-chart/helmfile.yaml`. `--rollback` auto-detects the backup type and restores only the relevant file. Chart-pin rollback skips the operator webhook handling path since no live CR version changes.
 - **2 charts**: `observability/logging/elasticsearch` (elasticsearch-eck OCI chart consumer), `observability/logging/kibana` (kibana-eck OCI chart consumer)
 
 #### 6. [external-oci.sh](templates/external-oci.sh) — external OCI chart + GitHub Releases tracking
@@ -335,7 +340,7 @@ New variants must follow the same convention (e.g., `external-multi-release.sh`,
 - **Use**: OCI-registry-distributed charts where the chart version itself needs tracking. Bumps `helmfile.yaml.version` via GitHub Releases API.
 - **Differences vs external-standard**: `helm search repo` is unavailable for OCI → use GitHub Releases instead.
 - **Extra variables**: `HELM_CHART` (oci://... URL), `GITHUB_REPO` (owner/repo), `GITHUB_TAG_PREFIX`
-- **Charts used**: currently 0 (reserved)
+- **2 charts**: `network/nginx-gateway-fabric` (NGF OCI chart), `storage/local-path-provisioner` (Rancher upstream OCI chart)
 
 #### 7. [ansible-github-release.sh](templates/ansible-github-release.sh) — Ansible-deployed (non-Helm) component + GitHub Releases tracking
 
@@ -478,7 +483,7 @@ Each template uses the same upstream lookup logic its `upgrade.sh` already relie
 | `local-with-templates` (helm mode) | `Chart.yaml` → `version` | `helm search repo <HELM_CHART>` (top entry) |
 | `local-with-templates` (git mode, `CHART_GIT_REPO` set) | `Chart.yaml` → `version` | Highest semver tag from `git ls-remote --tags` |
 | `local-cr-version` | `<VALUES_FILE>` → `<VERSION_KEY>` | `VERSION_SOURCE` feed (e.g. elastic-artifacts), respecting `MAJOR_PIN` |
-| `external-oci-cr-version` | `<VALUES_FILE>` → `<VERSION_KEY>` | `VERSION_SOURCE` feed, respecting `MAJOR_PIN` (no Chart.yaml) |
+| `external-oci-cr-version` | `<VALUES_FILE>` → `<VERSION_KEY>` (plus `helmfile.yaml.version` chart pin, shown in a separate table) | `VERSION_SOURCE` feed, respecting `MAJOR_PIN` (no Chart.yaml). Chart pin looked up against `CHART_SOURCE_REPO`'s GitHub Releases filtered by `<CHART_NAME>-X.Y.Z` prefix |
 | `ansible-github-release` | `<VERSION_FILE>` → `<VERSION_KEY>` | GitHub Releases API (`<GITHUB_REPO>`), respecting `MAJOR_PIN` |
 
 <br/>
@@ -505,12 +510,24 @@ Running 'helm repo update'...
 
 Summary: OK=15  UPDATE=7  ERROR=0  (total=22)
 Upgrades are available. Run 'cd <path> && ./upgrade.sh --dry-run' in each directory above.
+
+OCI chart pin status (external-oci-cr-version consumers):
+
+  STATUS   CHART                 CURRENT     LATEST      PATH
+  -------  --------------------  ----------  ----------  ----
+  OK       elasticsearch-eck     0.1.2       0.1.2       observability/logging/elasticsearch/upgrade.sh
+  OK       kibana-eck            0.1.1       0.1.1       observability/logging/kibana/upgrade.sh
+
+Chart summary: OK=2  UPDATE=0  ERROR=0  (total=2)
 ```
 
-STATUS column:
+STATUS column (main table = Stack/component version):
 - `OK`: current version matches the upstream latest
 - `UPDATE`: a higher upstream version exists → `cd` into the chart dir and run `./upgrade.sh --dry-run`
+- `NO_IMG`: upstream feed lists a new version but the container image has not been published yet (common for Elastic etc.)
 - `ERROR`: upstream lookup failed, CONFIG missing, current version could not be read, etc. (reason printed on the next line as `-> ...`)
+
+**OCI chart pin table** (secondary table, shown at the bottom): only rows using the `external-oci-cr-version` template with `CHART_SOURCE_*` CONFIG set appear here. This reports drift on `helmfile.yaml.version` (chart pin) independently of the Stack/component version. When `UPDATE` is shown, run `./upgrade.sh --check-chart` and `--upgrade-chart --dry-run` in the listed directory before applying.
 
 <br/>
 
@@ -777,24 +794,24 @@ Finds directories that have `Chart.yaml` but no `upgrade.sh`. Shown in `--status
 
 ### Case 1: external helm repo chart (most common)
 
-Candidates: `storage/local-path-provisoner`, `storage/nfs-subdir-external-provisioner`, `storage/static-file-server`
+Candidates: `storage/nfs-subdir-external-provisioner`, `storage/static-file-server`
 
 ```bash
 # 1. Copy the canonical to the new chart directory
-cp scripts/upgrade-sync/templates/external-standard.sh storage/local-path-provisoner/upgrade.sh
-chmod +x storage/local-path-provisoner/upgrade.sh
+cp scripts/upgrade-sync/templates/external-standard.sh storage/new-chart/upgrade.sh
+chmod +x storage/new-chart/upgrade.sh
 
 # 2. Fill in the CONFIG block placeholders with real values
-vim storage/local-path-provisoner/upgrade.sh
+vim storage/new-chart/upgrade.sh
 ```
 
 What to edit:
 ```bash
-SCRIPT_NAME="Local Path Provisioner Helm Chart Upgrade Script"
-HELM_REPO_NAME="rancher"
-HELM_REPO_URL="https://charts.rancher.com/release-v2.6"
-HELM_CHART="rancher/local-path-provisioner"
-CHANGELOG_URL="https://github.com/rancher/local-path-provisioner/releases"
+SCRIPT_NAME="New Chart Helm Upgrade Script"
+HELM_REPO_NAME="vendor"
+HELM_REPO_URL="https://charts.vendor.example/stable"
+HELM_CHART="vendor/new-chart"
+CHANGELOG_URL="https://github.com/vendor/new-chart/releases"
 CHART_TYPE="external"
 ```
 
@@ -803,7 +820,7 @@ CHART_TYPE="external"
 ./scripts/upgrade-sync/sync.sh --check
 
 # 4. Verify dry-run behavior
-cd storage/local-path-provisoner && ./upgrade.sh --dry-run
+cd storage/new-chart && ./upgrade.sh --dry-run
 ```
 
 <br/>
@@ -853,7 +870,7 @@ Precondition: `values/*.yaml` image tags must follow the `tag: v2.14.3` form. Ot
 
 ### Case 4: local chart with no helm repo (git source mode)
 
-For charts that are not published to any helm repo and only available in a git repository (e.g., rancher/local-path-provisioner). Use the `local-with-templates` canonical's git source mode.
+For charts that are not published to any helm repo and only available in a git repository. Use the `local-with-templates` canonical's git source mode.
 
 ```bash
 cp scripts/upgrade-sync/templates/local-with-templates.sh new-chart/upgrade.sh
@@ -886,6 +903,40 @@ Behavior:
 - Step 2: latest semver tag is auto-detected via `git ls-remote --tags`
 - Step 3: `git clone --depth 1 --branch v<VERSION>` (`v` prefix tried first, then plain version)
 - Step 5+: same templates/values diff + breaking-change check + custom preservation as helm repo mode
+
+<br/>
+
+### Case 5: external OCI chart (`oci://...`)
+
+Candidates: `network/nginx-gateway-fabric`, `storage/local-path-provisioner` (already adopted). Used to consume charts published to an OCI registry where `helm search repo` is unavailable; the GitHub Releases API supplies the latest tag instead.
+
+```bash
+cp scripts/upgrade-sync/templates/external-oci.sh new-chart/upgrade.sh
+chmod +x new-chart/upgrade.sh
+vim new-chart/upgrade.sh
+```
+
+What to edit:
+```bash
+SCRIPT_NAME="My OCI Chart Upgrade Script"
+HELM_REPO_NAME="vendor"                          # informational only for OCI
+HELM_REPO_URL="oci://ghcr.io/vendor/charts"      # informational only for OCI
+HELM_CHART="oci://ghcr.io/vendor/charts/my-chart"
+GITHUB_REPO="vendor/my-chart"                    # for Releases API (latest tag)
+GITHUB_TAG_PREFIX="${GITHUB_TAG_PREFIX:-v}"      # tags: vX.Y.Z -> X.Y.Z
+CHANGELOG_URL="https://github.com/vendor/my-chart/releases"
+CHART_TYPE="external"                            # set "local" to compare against local Chart.yaml + values.yaml as source of truth
+```
+
+```bash
+./scripts/upgrade-sync/sync.sh --check
+cd new-chart && ./upgrade.sh --dry-run
+```
+
+Behavior:
+- Step 2: latest tag is read from `api.github.com/repos/$GITHUB_REPO/releases/latest` and `GITHUB_TAG_PREFIX` is stripped
+- Step 3: chart metadata is fetched via `helm show chart/values` + `helm pull --untar`
+- Apply: refreshes `Chart.yaml` + `values.yaml` (+ `values.schema.json` if present) from upstream and bumps `helmfile.yaml.version` via sed
 
 <br/>
 

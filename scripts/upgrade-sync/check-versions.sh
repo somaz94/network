@@ -104,6 +104,7 @@ dump_config_vars() {
     VALUES_FILE=""; VERSION_KEY=""; MAJOR_PIN=""
     CONTAINER_IMAGE=""
     GITHUB_REPO=""; VERSION_FILE=""
+    CHART_SOURCE_TYPE=""; CHART_SOURCE_REPO=""; CHART_NAME=""
     # CONFIG block lives in our own repo, so eval is safe here.
     eval "$block" 2>/dev/null || true
     printf 'SCRIPT_NAME=%q\n' "${SCRIPT_NAME:-}"
@@ -121,6 +122,9 @@ dump_config_vars() {
     printf 'CONTAINER_IMAGE=%q\n' "${CONTAINER_IMAGE:-}"
     printf 'GITHUB_REPO=%q\n' "${GITHUB_REPO:-}"
     printf 'VERSION_FILE=%q\n' "${VERSION_FILE:-}"
+    printf 'CHART_SOURCE_TYPE=%q\n' "${CHART_SOURCE_TYPE:-}"
+    printf 'CHART_SOURCE_REPO=%q\n' "${CHART_SOURCE_REPO:-}"
+    printf 'CHART_NAME=%q\n' "${CHART_NAME:-}"
   )
 }
 
@@ -235,6 +239,48 @@ fetch_latest_version_source() {
   fetch_ga_versions_source "$src" "$major_pin" "$src_arg" | head -1
 }
 
+# Fetch the latest OCI chart version published under <repo> with a release tag
+# prefix of <name>- (e.g. "elasticsearch-eck-0.1.2").
+fetch_latest_chart_version_gh() {
+  local repo="$1" name="$2"
+  [ -z "$repo" ] || [ -z "$name" ] && return 0
+  curl -sSfL "https://api.github.com/repos/$repo/releases?per_page=100" 2>/dev/null \
+    | CHART_NAME="$name" python3 -c "
+import json, sys, re, os
+try:
+    d = json.load(sys.stdin)
+except Exception:
+    sys.exit(0)
+prefix = os.environ.get('CHART_NAME', '') + '-'
+tags = [r.get('tag_name', '') for r in d
+        if not r.get('prerelease') and not r.get('draft')]
+vers = []
+for t in tags:
+    if t.startswith(prefix):
+        v = t[len(prefix):]
+        if re.fullmatch(r'\d+\.\d+\.\d+', v):
+            vers.append(v)
+vers.sort(key=lambda v: tuple(int(p) for p in v.split('.')), reverse=True)
+if vers:
+    print(vers[0])
+" 2>/dev/null
+}
+
+# Read the OCI chart pin from a helmfile.yaml (first indented 'version:' line).
+read_helmfile_chart_pin() {
+  local file="$1"
+  [ -f "$file" ] || return 0
+  awk '
+    /^[[:space:]]+version:[[:space:]]/ {
+      sub(/^[[:space:]]+version:[[:space:]]*/, "")
+      gsub(/["\x27]/, "")
+      sub(/[[:space:]]+#.*$/, "")
+      print
+      exit
+    }
+  ' "$file"
+}
+
 # Find newest version with a published image by walking the GA list.
 # Caps at max_attempts to avoid long waits.
 find_latest_available_source() {
@@ -334,6 +380,7 @@ matches_only() {
 ROW_SEP=$'\x1f'
 ROWS=()         # rel | tpl | label | current | fetcher | fetcher_arg | extra_arg | container_image | version_source_arg
 HELM_REPOS=()   # "name=url" pairs (deduped later)
+CHART_ROWS=()   # rel | chart_name | chart_current | chart_source_type | chart_source_repo
 
 echo "Collecting managed upgrade.sh configs..."
 total=0
@@ -420,6 +467,12 @@ while IFS= read -r f; do
   esac
 
   ROWS+=("$rel$ROW_SEP$tpl$ROW_SEP$label$ROW_SEP$current$ROW_SEP$fetcher$ROW_SEP$fetcher_arg$ROW_SEP$extra_arg$ROW_SEP${CONTAINER_IMAGE:-}$ROW_SEP${VERSION_SOURCE_ARG:-}")
+
+  # Collect OCI chart-pin tracking rows (only external-oci-cr-version today).
+  if [ -n "${CHART_SOURCE_TYPE:-}" ] && [ -n "${CHART_SOURCE_REPO:-}" ] && [ -n "${CHART_NAME:-}" ]; then
+    chart_current=$(read_helmfile_chart_pin "$chart_dir/helmfile.yaml")
+    CHART_ROWS+=("$rel$ROW_SEP$CHART_NAME$ROW_SEP${chart_current:-}$ROW_SEP$CHART_SOURCE_TYPE$ROW_SEP$CHART_SOURCE_REPO")
+  fi
 done < <(find_managed_files)
 
 managed=$((total - skipped))
@@ -583,6 +636,86 @@ elif [ "$any_error" -eq 0 ] && [ "$no_image_count" -eq 0 ]; then
 fi
 if [ "$no_image_count" -gt 0 ]; then
   echo "NO_IMG: version listed in upstream feed but container image not published yet. Wait or skip."
+fi
+
+# -----------------------------------------------
+# Phase 4: OCI chart pin table (external-oci-cr-version only)
+# -----------------------------------------------
+
+if [ "${#CHART_ROWS[@]}" -gt 0 ]; then
+  echo ""
+  echo "OCI chart pin status (external-oci-cr-version consumers):"
+  echo ""
+  printf '  %-7s  %-20s  %-10s  %-10s  %s\n' "STATUS" "CHART" "CURRENT" "LATEST" "PATH"
+  printf '  %-7s  %-20s  %-10s  %-10s  %s\n' "-------" "--------------------" "----------" "----------" "----"
+
+  chart_ok=0
+  chart_update=0
+  chart_error=0
+  chart_any_update=0
+  chart_any_error=0
+
+  for row in "${CHART_ROWS[@]}"; do
+    IFS="$ROW_SEP" read -r c_rel c_name c_current c_src_type c_src_repo <<< "$row"
+    c_latest=""
+    c_err=""
+
+    case "$c_src_type" in
+      github-releases)
+        if [ -z "$c_src_repo" ] || [ -z "$c_name" ]; then
+          c_err="CHART_SOURCE_REPO or CHART_NAME empty"
+        else
+          c_latest=$(fetch_latest_chart_version_gh "$c_src_repo" "$c_name")
+          [ -z "$c_latest" ] && c_err="no matching '$c_name-X.Y.Z' release in $c_src_repo"
+        fi
+        ;;
+      *)
+        c_err="unsupported CHART_SOURCE_TYPE '$c_src_type'"
+        ;;
+    esac
+
+    if [ -n "$c_err" ]; then
+      c_status="ERROR"
+      chart_error=$((chart_error + 1))
+      chart_any_error=1
+      c_latest="${c_latest:-—}"
+    elif [ -z "$c_current" ]; then
+      c_status="ERROR"
+      c_err="could not read chart pin from helmfile.yaml"
+      chart_error=$((chart_error + 1))
+      chart_any_error=1
+      c_current="—"
+    elif [ "$c_current" = "$c_latest" ]; then
+      c_status="OK"
+      chart_ok=$((chart_ok + 1))
+    else
+      c_status="UPDATE"
+      chart_update=$((chart_update + 1))
+      chart_any_update=1
+    fi
+
+    if $UPDATES_ONLY && [ "$c_status" = "OK" ]; then
+      continue
+    fi
+
+    printf '  %-7s  %-20s  %-10s  %-10s  %s\n' \
+      "$c_status" "${c_name:-—}" "${c_current:-—}" "${c_latest:-—}" "$c_rel"
+    if [ -n "$c_err" ]; then
+      printf '           -> %s\n' "$c_err"
+    fi
+  done
+
+  echo ""
+  echo "Chart summary: OK=$chart_ok  UPDATE=$chart_update  ERROR=$chart_error  (total=${#CHART_ROWS[@]})"
+  if [ "$chart_any_update" -eq 1 ]; then
+    echo "Chart pin updates available. In each path above:"
+    echo "  ./upgrade.sh --check-chart              # details"
+    echo "  ./upgrade.sh --upgrade-chart --dry-run  # preview + render diff"
+    echo "  ./upgrade.sh --upgrade-chart            # apply"
+  fi
+  if [ "$chart_any_error" -eq 1 ]; then
+    any_error=1
+  fi
 fi
 
 if [ "$any_error" -eq 1 ]; then

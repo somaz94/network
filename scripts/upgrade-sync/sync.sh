@@ -119,8 +119,15 @@ detect_template() {
   local f="$1"
   # external-oci must precede ansible-github-release: both define GITHUB_REPO=,
   # but only OCI charts have HELM_CHART starting with oci://.
+  # Within OCI: external-oci-with-mirror is a superset that defines a
+  # `do_mirror()` Bash function for image mirroring; without it, the file
+  # uses the plain external-oci body.
   if grep -qE '^HELM_CHART=("|'"'"')?oci://' "$f"; then
-    echo "external-oci"
+    if grep -qE '^do_mirror\(\)' "$f"; then
+      echo "external-oci-with-mirror"
+    else
+      echo "external-oci"
+    fi
   elif grep -q '^GITHUB_REPO=' "$f"; then
     echo "ansible-github-release"
   elif grep -q '^VERSION_SOURCE=' "$f"; then
