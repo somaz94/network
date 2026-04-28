@@ -4,7 +4,7 @@ repositories:
 
 releases:
   - name: external-dns
-    namespace: luckyday
+    namespace: example-app
     createNamespace: true   
     # chart: ./ # Use local chart directory
     # Use the Remote chart repository external-dns/external-dns

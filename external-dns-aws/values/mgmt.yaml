@@ -44,7 +44,7 @@ resources:
 logLevel: info
 logFormat: text
 
-# # Monitor only the luckyday namespace
+# # Monitor only the example-app namespace
 # namespaced: true
 
 # DNS update interval
@@ -60,12 +60,12 @@ policy: upsert-only # Policy description added; create if record does not exist,
 
 # TXT record registry settings
 registry: txt
-txtOwnerId: "luckyday-external-dns"
+txtOwnerId: "example-app-external-dns"
 txtPrefix: "external-dns-"
 
-# Domain filter, manage only luckyday.secondary-projectsvc.com
+# Domain filter, manage only example-app.secondary-projectsvc.com
 domainFilters:
-  - luckyday.secondary-projectsvc.com
+  - example-app.secondary-projectsvc.com
 
 # AWS Route53 provider
 provider:
@@ -75,4 +75,4 @@ provider:
 extraArgs:
   - --aws-zone-type=public
   - --aws-prefer-cname
-  - --annotation-filter=external-dns.luckyday.kubernetes.io/hostname
+  - --annotation-filter=external-dns.example-app.kubernetes.io/hostname
