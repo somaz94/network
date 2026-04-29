@@ -14,14 +14,15 @@ set -euo pipefail
 #   cd <chart-dir> && ./upgrade.sh                # apply
 #
 # Supported upstream sources (by template header):
-#   external-standard        -> helm search repo
-#   external-with-image-tag  -> helm search repo
-#   external-oci             -> GitHub Releases API (GITHUB_REPO)
-#   external-oci-cr-version  -> VERSION_SOURCE feed (VALUES_FILE-backed CR version)
-#   local-with-templates     -> helm search repo OR git ls-remote --tags
-#                               (git mode when CHART_GIT_REPO is non-empty)
-#   local-cr-version         -> VERSION_SOURCE feed (e.g. elastic-artifacts)
-#   ansible-github-release   -> GitHub Releases API (GITHUB_REPO)
+#   external-standard         -> helm search repo
+#   external-with-image-tag   -> helm search repo
+#   external-oci              -> GitHub Releases API (GITHUB_REPO, honors GITHUB_TAG_PREFIX)
+#   external-oci-with-mirror  -> same as external-oci (mirror stage runs at apply time only)
+#   external-oci-cr-version   -> VERSION_SOURCE feed (VALUES_FILE-backed CR version)
+#   local-with-templates      -> helm search repo OR git ls-remote --tags
+#                                (git mode when CHART_GIT_REPO is non-empty)
+#   local-cr-version          -> VERSION_SOURCE feed (e.g. elastic-artifacts)
+#   ansible-github-release    -> GitHub Releases API (GITHUB_REPO)
 #
 # Portability: bash 3.2+ (macOS default), POSIX-ish awk, no `sed -i`.
 # ============================================================
@@ -103,7 +104,7 @@ dump_config_vars() {
     VERSION_SOURCE=""; VERSION_SOURCE_ARG=""
     VALUES_FILE=""; VERSION_KEY=""; MAJOR_PIN=""
     CONTAINER_IMAGE=""
-    GITHUB_REPO=""; VERSION_FILE=""
+    GITHUB_REPO=""; GITHUB_TAG_PREFIX=""; VERSION_FILE=""
     CHART_SOURCE_TYPE=""; CHART_SOURCE_REPO=""; CHART_NAME=""
     # CONFIG block lives in our own repo, so eval is safe here.
     eval "$block" 2>/dev/null || true
@@ -121,6 +122,7 @@ dump_config_vars() {
     printf 'MAJOR_PIN=%q\n' "${MAJOR_PIN:-}"
     printf 'CONTAINER_IMAGE=%q\n' "${CONTAINER_IMAGE:-}"
     printf 'GITHUB_REPO=%q\n' "${GITHUB_REPO:-}"
+    printf 'GITHUB_TAG_PREFIX=%q\n' "${GITHUB_TAG_PREFIX:-}"
     printf 'VERSION_FILE=%q\n' "${VERSION_FILE:-}"
     printf 'CHART_SOURCE_TYPE=%q\n' "${CHART_SOURCE_TYPE:-}"
     printf 'CHART_SOURCE_REPO=%q\n' "${CHART_SOURCE_REPO:-}"
@@ -168,7 +170,7 @@ fetch_latest_git_tags() {
 }
 
 fetch_ga_versions_source() {
-  local src="$1" major_pin="$2" src_arg="${3:-}"
+  local src="$1" major_pin="$2" src_arg="${3:-}" tag_prefix="${4:-}"
   case "$src" in
     elastic-artifacts)
       curl -sSfL "https://artifacts-api.elastic.co/v1/versions" 2>/dev/null \
@@ -191,15 +193,19 @@ for v in ga:
     github-releases)
       [ -z "$src_arg" ] && return 0
       curl -sSfL "https://api.github.com/repos/$src_arg/releases?per_page=100" 2>/dev/null \
-        | MAJOR_PIN="$major_pin" python3 -c "
+        | MAJOR_PIN="$major_pin" GH_TAG_PREFIX="$tag_prefix" python3 -c "
 import json, sys, re, os
 try:
     d = json.load(sys.stdin)
 except Exception:
     sys.exit(0)
+prefix = os.environ.get('GH_TAG_PREFIX', '').strip()
 tags = [r.get('tag_name', '') for r in d
         if not r.get('prerelease') and not r.get('draft')]
-tags = [re.sub(r'^v', '', t) for t in tags]
+if prefix and prefix != 'v':
+    tags = [t[len(prefix):] for t in tags if t.startswith(prefix)]
+else:
+    tags = [re.sub(r'^v', '', t) for t in tags]
 ga = [t for t in tags if re.fullmatch(r'\d+\.\d+\.\d+', t)]
 major = os.environ.get('MAJOR_PIN', '').strip()
 if major:
@@ -235,8 +241,8 @@ for v in ga:
 }
 
 fetch_latest_version_source() {
-  local src="$1" major_pin="$2" src_arg="${3:-}"
-  fetch_ga_versions_source "$src" "$major_pin" "$src_arg" | head -1
+  local src="$1" major_pin="$2" src_arg="${3:-}" tag_prefix="${4:-}"
+  fetch_ga_versions_source "$src" "$major_pin" "$src_arg" "$tag_prefix" | head -1
 }
 
 # Fetch the latest OCI chart version published under <repo> with a release tag
@@ -284,7 +290,7 @@ read_helmfile_chart_pin() {
 # Find newest version with a published image by walking the GA list.
 # Caps at max_attempts to avoid long waits.
 find_latest_available_source() {
-  local src="$1" major_pin="$2" image="$3" src_arg="${4:-}"
+  local src="$1" major_pin="$2" image="$3" src_arg="${4:-}" tag_prefix="${5:-}"
   local max_attempts=15
   local attempt=0
   while IFS= read -r v; do
@@ -294,7 +300,7 @@ find_latest_available_source() {
       echo "$v"
       return 0
     fi
-  done < <(fetch_ga_versions_source "$src" "$major_pin" "$src_arg")
+  done < <(fetch_ga_versions_source "$src" "$major_pin" "$src_arg" "$tag_prefix")
   return 1
 }
 
@@ -378,7 +384,7 @@ matches_only() {
 # Use ASCII Unit Separator (0x1f) so consecutive empty fields don't collapse
 # (bash `read` merges consecutive whitespace IFS chars; \x1f is non-whitespace).
 ROW_SEP=$'\x1f'
-ROWS=()         # rel | tpl | label | current | fetcher | fetcher_arg | extra_arg | container_image | version_source_arg
+ROWS=()         # rel | tpl | label | current | fetcher | fetcher_arg | extra_arg | container_image | version_source_arg | tag_prefix
 HELM_REPOS=()   # "name=url" pairs (deduped later)
 CHART_ROWS=()   # rel | chart_name | chart_current | chart_source_type | chart_source_repo
 
@@ -408,6 +414,7 @@ while IFS= read -r f; do
   fetcher=""
   fetcher_arg=""
   extra_arg=""
+  tag_prefix=""
   label="${SCRIPT_NAME:-$(basename "$(dirname "$f")")}"
   chart_dir=$(dirname "$f")
 
@@ -420,12 +427,15 @@ while IFS= read -r f; do
         HELM_REPOS+=("$HELM_REPO_NAME=$HELM_REPO_URL")
       fi
       ;;
-    external-oci)
+    external-oci|external-oci-with-mirror)
       # OCI charts: no `helm search repo`. Use GitHub Releases API instead.
+      # external-oci-with-mirror is the same upstream-tracking pattern as
+      # external-oci; the mirror stage runs at apply time, not at version check.
       [ -f "$chart_dir/Chart.yaml" ] && current=$(read_yaml_value "$chart_dir/Chart.yaml" "version")
       fetcher="version-source"
       fetcher_arg="github-releases"
       VERSION_SOURCE_ARG="$GITHUB_REPO"
+      tag_prefix="$GITHUB_TAG_PREFIX"
       ;;
     local-with-templates)
       [ -f "$chart_dir/Chart.yaml" ] && current=$(read_yaml_value "$chart_dir/Chart.yaml" "version")
@@ -466,7 +476,7 @@ while IFS= read -r f; do
       ;;
   esac
 
-  ROWS+=("$rel$ROW_SEP$tpl$ROW_SEP$label$ROW_SEP$current$ROW_SEP$fetcher$ROW_SEP$fetcher_arg$ROW_SEP$extra_arg$ROW_SEP${CONTAINER_IMAGE:-}$ROW_SEP${VERSION_SOURCE_ARG:-}")
+  ROWS+=("$rel$ROW_SEP$tpl$ROW_SEP$label$ROW_SEP$current$ROW_SEP$fetcher$ROW_SEP$fetcher_arg$ROW_SEP$extra_arg$ROW_SEP${CONTAINER_IMAGE:-}$ROW_SEP${VERSION_SOURCE_ARG:-}$ROW_SEP$tag_prefix")
 
   # Collect OCI chart-pin tracking rows (only external-oci-cr-version today).
   if [ -n "${CHART_SOURCE_TYPE:-}" ] && [ -n "${CHART_SOURCE_REPO:-}" ] && [ -n "${CHART_NAME:-}" ]; then
@@ -536,7 +546,7 @@ error_count=0
 no_image_count=0
 
 for row in "${ROWS[@]}"; do
-  IFS="$ROW_SEP" read -r rel tpl label current fetcher fetcher_arg extra_arg container_image version_source_arg <<< "$row"
+  IFS="$ROW_SEP" read -r rel tpl label current fetcher fetcher_arg extra_arg container_image version_source_arg tag_prefix <<< "$row"
 
   latest=""
   err=""
@@ -566,7 +576,7 @@ for row in "${ROWS[@]}"; do
       if [ -z "$fetcher_arg" ]; then
         err="VERSION_SOURCE empty in CONFIG"
       else
-        latest=$(fetch_latest_version_source "$fetcher_arg" "$extra_arg" "$version_source_arg")
+        latest=$(fetch_latest_version_source "$fetcher_arg" "$extra_arg" "$version_source_arg" "$tag_prefix")
         [ -z "$latest" ] && err="version-source '$fetcher_arg' failed or unsupported"
       fi
       ;;
@@ -593,7 +603,7 @@ for row in "${ROWS[@]}"; do
     # Verify container image exists for local-cr-version charts.
     if [ -n "$container_image" ] && ! verify_image_exists "$container_image" "$latest"; then
       # Search for the newest version with a published image.
-      available=$(find_latest_available_source "$fetcher_arg" "$extra_arg" "$container_image" "$version_source_arg" 2>/dev/null) || true
+      available=$(find_latest_available_source "$fetcher_arg" "$extra_arg" "$container_image" "$version_source_arg" "$tag_prefix" 2>/dev/null) || true
       if [ -n "$available" ] && [ "$available" != "$current" ]; then
         status="NO_IMG"
         err="$latest image missing; latest available: $available (use --version $available)"
