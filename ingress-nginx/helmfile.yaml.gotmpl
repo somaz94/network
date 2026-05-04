@@ -1,0 +1,48 @@
+# Deploy ingress-nginx in 11-tenant fan-out via helmfile, consuming upstream ingress-nginx chart. / ingress-nginx 11-tenant fan-out 을 helmfile 로 배포, 업스트림 ingress-nginx 차트 소비.
+#
+# Chart Source: kubernetes/ingress-nginx (https://kubernetes.github.io/ingress-nginx). / Chart 출처: kubernetes/ingress-nginx.
+# Release Topology: 1 default (mgmt) + 10 per-tenant (public-a..j); each release has its own / Release 토폴로지: 기본 1 (mgmt) + tenant 별 10 (public-a..j); 각 release 가 독립된
+#   IngressClass + LoadBalancer IP. / IngressClass + LB IP.
+# Selectors: helmfile -l variant=<mgmt|public-a..j> <cmd> for per-tenant ops. / Selector: helmfile -l variant=<mgmt|public-a..j> <cmd> 로 tenant 단위 작업.
+# Lifecycle Hooks: presync ensures namespace exists. / 라이프사이클 훅: presync 가 namespace 보장.
+#
+# Chart version pinned (single literal inside range body — upgrade.sh sed-bumps work). / 차트 버전 고정 (range 안에 literal 한 번만 — upgrade.sh sed bump 호환).
+# After validating a new release, bump via ./upgrade.sh. / 새 릴리즈 검증 후 ./upgrade.sh 로 bump.
+{{- $namespace := "ingress-nginx" }}
+{{- /* Variant list — drop a key to retire a tenant; first entry "mgmt" is the default class. / variant 목록 — tenant 제거하려면 key 제거. 첫 항목 "mgmt" 가 default class. */ -}}
+{{- $variants := list "mgmt" "public-a" "public-b" "public-c" "public-d" "public-e" "public-f" "public-g" "public-h" "public-i" "public-j" }}
+
+repositories:
+  - name: ingress-nginx
+    url: https://kubernetes.github.io/ingress-nginx
+
+releases:
+{{- range $variant := $variants }}
+  - name: ingress-nginx{{ if ne $variant "mgmt" }}-{{ $variant }}{{ end }}
+    namespace: {{ $namespace }}
+    chart: ingress-nginx/ingress-nginx
+    version: 4.15.1
+    labels:
+      variant: {{ $variant }}
+      app: ingress-nginx
+    values:
+      - values/{{ if eq $variant "mgmt" }}mgmt{{ else }}mgmt-{{ $variant }}{{ end }}.yaml
+{{- end }}
+
+# 2025-XX disabled — beta chart test slot (4.12.0-beta.0), local Chart, never wired up. / 2025-XX 비활성화 — beta chart 테스트 슬롯 (4.12.0-beta.0), 로컬 Chart, 미사용.
+# - name: ingress-nginx-test
+#   namespace: ingress-nginx
+#   chart: .
+#   version: 4.12.0-beta.0
+#   values:
+#     - values/mgmt.yaml
+
+# Ensure namespace before sync (idempotent no-op when present). / sync 전 namespace 보장 (없으면 생성, 있으면 idempotent no-op).
+# kubectl args aren't shell-parsed → use sh -c to evaluate || true. / kubectl args 는 shell 해석 안 됨 → sh -c 로 || true 유효화.
+hooks:
+  - events: ["presync"]
+    showlogs: true
+    command: "sh"
+    args:
+      - "-c"
+      - "kubectl create namespace {{ $namespace }} 2>/dev/null || true"

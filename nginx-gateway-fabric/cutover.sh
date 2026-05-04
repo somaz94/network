@@ -23,7 +23,10 @@
 
 set -euo pipefail
 
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve script path portably across bash and zsh
+_SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
+SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT_PATH")" && pwd)"
+unset _SCRIPT_PATH
 MANIFEST="${SCRIPT_DIR}/manifests/nginxproxies.yaml"
 NGF_NS="nginx-gateway"
 ING_NS="ingress-nginx"

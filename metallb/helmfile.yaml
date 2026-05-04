@@ -1,3 +1,7 @@
+# Deploy MetalLB (bare-metal LoadBalancer) via helmfile, consuming upstream metallb/metallb chart.
+# Lifecycle hook: postsync applies IPAddressPool
+# Chart version pinned. Bump via ./upgrade.sh after verifying the new release.
+
 repositories:
   - name: metallb
     url: https://metallb.github.io/metallb
@@ -13,8 +17,9 @@ releases:
     values:
       - values/mgmt.yaml
 
-# Apply MetalLB CRD config (postsync, runs after controller is ready)
-# Resolve webhook timing issue by applying config after Pod becomes ready with wait true
+# Apply MetalLB CRD config (postsync, runs after controller is ready).
+# `wait: true` on the release ensures the controller pod is Ready before this hook fires,
+# avoiding the validating webhook race that 0.13+ introduced.
 hooks:
   - events: ["postsync"]
     showlogs: true

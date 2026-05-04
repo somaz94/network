@@ -1,3 +1,7 @@
+# Deploy external-dns (AWS Route53 sync) via helmfile, consuming upstream external-dns chart.
+# _optional/ — only used when the cluster fronts AWS-managed DNS zones.
+# Chart version pinned. Bump via ./upgrade.sh after verifying the new release.
+
 repositories:
   - name: external-dns
     url: https://kubernetes-sigs.github.io/external-dns/
@@ -5,18 +9,8 @@ repositories:
 releases:
   - name: external-dns
     namespace: example-app
-    createNamespace: true   
-    # chart: ./ # Use local chart directory
-    # Use the Remote chart repository external-dns/external-dns
+    createNamespace: true
     chart: external-dns/external-dns
     version: 1.20.0
     values:
       - values/mgmt.yaml
-
-
-# helmDefaults:
-#   wait: true
-#   timeout: 300
-#   atomic: true
-#   cleanupOnFail: true
-
