@@ -1,4 +1,4 @@
-# Tenant-level NGF custom resources (Gateway / NginxProxy / ServiceMonitor) for the mgmt cluster.
+# Tenant-level NGF custom resources (Gateway / NginxProxy / ServiceMonitor) for the dev cluster.
 #
 #
 # Section order mirrors `cr-chart/values.yaml` for cross-reference.

@@ -15,7 +15,7 @@ external-dns-aws/
 ├── values.yaml             # Upstream defaults (managed by upgrade.sh)
 ├── values.schema.json      # Values schema (shipped by upstream)
 ├── values/
-│   └── mgmt.yaml           # Operational values (domain filter, IRSA Role ARN)
+│   └── dev.yaml           # Operational values (domain filter, IRSA Role ARN)
 ├── upgrade.sh              # Version bump script
 ├── backup/                 # Auto-generated backups (rollback trail)
 └── README.md

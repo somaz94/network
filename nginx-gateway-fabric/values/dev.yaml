@@ -8,7 +8,7 @@ nginxGateway:
   # default: "nginx" → our repo uses "ngf" to coexist with legacy ingress-nginx
   gatewayClassName: ngf
 
-  # chart default is 1; mgmt cluster matches legacy ingress-nginx convention (replicaCount: 1)
+  # chart default is 1; dev cluster matches legacy ingress-nginx convention (replicaCount: 1)
   replicas: 1
 
   # default: true → opt out of product telemetry (privacy)
@@ -19,5 +19,5 @@ nginxGateway:
   # metrics: default enable=true, port=9113. No override needed.
 
 nginx:
-  # chart default is 1; mgmt cluster matches legacy ingress-nginx convention
+  # chart default is 1; dev cluster matches legacy ingress-nginx convention
   replicas: 1

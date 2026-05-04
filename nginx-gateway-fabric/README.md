@@ -14,11 +14,11 @@ nginx-gateway-fabric/
 ├── helmfile.yaml.gotmpl         # Two releases (controller + cr) — auto-reads each Chart.yaml
 ├── values.yaml                  # Upstream NGF defaults (managed by upgrade.sh, placeholder)
 ├── values/
-│   ├── mgmt.yaml                # NGF controller custom settings (replicas, metrics, etc.)
-│   └── mgmt-cr.yaml             # cr release env values (11 Gateway + NginxProxy + ServiceMonitor)
+│   ├── dev.yaml                # NGF controller custom settings (replicas, metrics, etc.)
+│   └── dev-cr.yaml             # cr release env values (11 Gateway + NginxProxy + ServiceMonitor)
 ├── cr-chart/                    # Mirror of external chart metadata (somaz94/nginx-gateway-cr)
 │   ├── Chart.yaml               # Version pin (helmfile readFile reference)
-│   ├── values.yaml              # External chart defaults reference (actual values: values/mgmt-cr.yaml)
+│   ├── values.yaml              # External chart defaults reference (actual values: values/dev-cr.yaml)
 │   └── values.schema.json       # JSON Schema — local IDE / CI validation
 ├── upgrade.sh                   # NGF controller upgrade (external-oci, GitHub Releases API)
 ├── README.md / README-en.md
@@ -81,7 +81,7 @@ helmfile destroy     # reverse → postuninstall hook also removes CRDs / namesp
 
 ### Targeting a specific release (selector)
 
-Most common scenario: re-apply only the cr release after editing `values/mgmt-cr.yaml`.
+Most common scenario: re-apply only the cr release after editing `values/dev-cr.yaml`.
 
 ```bash
 # cr (Gateway / NginxProxy / ServiceMonitor) only

@@ -15,7 +15,7 @@ releases:
     wait: true
     timeout: 300
     values:
-      - values/mgmt.yaml
+      - values/dev.yaml
 
 # Apply MetalLB CRD config (postsync, runs after controller is ready).
 # `wait: true` on the release ensures the controller pod is Ready before this hook fires,

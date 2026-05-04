@@ -45,7 +45,7 @@ releases:
     wait: true
     timeout: 300
     values:
-      - values/mgmt.yaml
+      - values/dev.yaml
 
     hooks:
       # prepare: runs before every command — pre-installs CRDs (avoids chicken-and-egg). / 모든 명령 전 실행 — CRDs 선설치 (chicken-and-egg 회피).
@@ -123,4 +123,4 @@ releases:
     needs:
       - nginx-gateway/nginx-gateway-fabric
     values:
-      - values/mgmt-cr.yaml
+      - values/dev-cr.yaml
