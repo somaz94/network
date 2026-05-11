@@ -191,4 +191,3 @@ For the exact Gateway API version used, see `https://github.com/nginx/nginx-gate
 - https://docs.nginx.com/nginx-gateway-fabric/
 - https://github.com/nginx/nginx-gateway-fabric/releases
 - https://gateway-api.sigs.k8s.io/
-- Migration plan: `~/.claude/plans/humming-frolicking-giraffe.md`

@@ -50,6 +50,10 @@ releases:
     hooks:
       # prepare: runs before every command — pre-installs CRDs (avoids chicken-and-egg). / 모든 명령 전 실행 — CRDs 선설치 (chicken-and-egg 회피).
       # Also runs on destroy but the idempotent apply only wastes 2-3 seconds. / destroy 시에도 실행되지만 idempotent apply 라 2-3 초 낭비 수준.
+      # HELMFILE_SKIP_CLUSTER_HOOKS=1 short-circuits the cluster write so `helmfile lint` /
+      # `helmfile diff --skip-deps` can run under a low-privilege ServiceAccount (e.g. CI runner). /
+      # HELMFILE_SKIP_CLUSTER_HOOKS=1 은 클러스터 쓰기를 건너뛰어 저권한 ServiceAccount(CI runner 등)에서
+      # `helmfile lint` / `helmfile diff --skip-deps` 가 동작하도록 함.
       - events: ["prepare"]
         showlogs: true
         command: "bash"
@@ -57,6 +61,10 @@ releases:
           - "-c"
           - |
             set -e
+            if [ "${HELMFILE_SKIP_CLUSTER_HOOKS:-}" = "1" ]; then
+              echo "=== prepare hook: skipped (HELMFILE_SKIP_CLUSTER_HOOKS=1) ==="
+              exit 0
+            fi
             echo "=== prepare hook: installing CRDs ==="
 
             GW_API_VER=$(curl -fsSL \
