@@ -1,23 +1,15 @@
 # Tenant-level NGF custom resources (Gateway / NginxProxy / ServiceMonitor) for the dev cluster.
 #
-#
 # Section order mirrors `cr-chart/values.yaml` for cross-reference.
 # Only sections we override are present here; others fall back to chart defaults.
-#
-#
 #
 # Chart source pinned in helmfile.yaml.gotmpl. To customize the chart itself
 # (templates / values schema / new fields), fork charts/nginx-gateway-cr/ from
 # https://github.com/somaz94/helm-charts and update the helmfile to point at the fork.
 #
-#
-#
-#
 # Cutover/IP swap is completed by editing the loadBalancerIP line and running `helmfile apply`.
 #
-#
 # Current state reflects real IP placement after Phase 6 cutover (2026-04-17).
-#
 
 # ---------------------------------------------------------------------------
 # NginxProxy defaults
@@ -25,12 +17,9 @@
 # Common NginxProxy config (applied to all 11 proxies; per-gateway override
 # possible under gateways[].proxy if needed).
 #
-#
 # externalTrafficPolicy: Cluster ensures kube-proxy forwards across all nodes when an
 # internal pod calls the LB IP.
-#
 # (Changed from Local to Cluster during Phase 6 regression fix on 2026-04-17; see Plan issue 7.)
-#
 proxy:
   replicas: 1
   service:
@@ -40,10 +29,8 @@ proxy:
 # Gateways
 # ---------------------------------------------------------------------------
 # 11 Gateways + 11 matching NginxProxies (`<name>-proxy` auto-named by the chart).
-#
 gateways:
   # Main: HTTPS enabled (wildcard-example-tls). 13 core production apps.
-  #
   - name: ngf
     loadBalancerIP: 192.168.1.55
     https:
@@ -52,7 +39,6 @@ gateways:
       tlsSecretName: wildcard-example-tls
 
   # Public a..j: HTTP-only listener. Class split for ApplicationSet and individual apps.
-  #
   - name: ngf-public-a
     loadBalancerIP: 192.168.1.56
   - name: ngf-public-b
@@ -79,8 +65,6 @@ gateways:
 # ---------------------------------------------------------------------------
 # Disabled — NGF 2.x exposes /metrics only on the controller Pod, not the Service,
 # so a ServiceMonitor finds 0 targets. Use podMonitor (below) instead.
-#
-#
 serviceMonitor:
   controller:
     enabled: false
@@ -91,15 +75,10 @@ serviceMonitor:
 # PodMonitors (Prometheus Operator / kube-prometheus-stack)
 # ---------------------------------------------------------------------------
 # controller: scrape NGF control-plane Pod directly (port 'metrics' = 9113).
-#
 # dataplane: per-nginx-pod metrics on port 'metrics' = 9113 (nginx-agent OTEL native export).
-#
 # Exposed metric families: nginx_http_requests_total / nginx_http_connections_total /
 # nginx_http_connection_count_connections (outcome=ACTIVE|READING|WRITING|WAITING|ACCEPTED|HANDLED) +
 # agent system_* (cpu/memory/network). No histograms (latency p95/p99) or status-code labels.
-#
-# / nginx_http_connection_count_connections (outcome=ACTIVE|READING|WRITING|WAITING|ACCEPTED|HANDLED) +
-#
 podMonitor:
   namespace: monitoring
   releaseLabel: kube-prometheus-stack
@@ -111,18 +90,11 @@ podMonitor:
     # controller Pod in NGF 2.x — data-plane Pods carry per-gateway name labels
     # (ngf-ngf, ngf-public-a, ...). Override with Gateway-API's gateway-name label (present
     # on every data-plane Pod, absent on the controller).
-    #
-    #
-    #
     selector:
       # Null-override chart default matchLabels — Helm deep-merges maps, and `{}` does NOT
       # drop sub-keys; only explicit `key: null` removes them. Without this, the chart
       # default (app.kubernetes.io/name=nginx-gateway-fabric) is AND-combined with
       # matchExpressions below and the intersection is empty (nothing scraped).
-      #
-      #
-      #
-      #
       matchLabels:
         app.kubernetes.io/name: null
       matchExpressions:

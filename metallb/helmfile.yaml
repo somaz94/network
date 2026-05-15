@@ -1,5 +1,5 @@
 # Deploy MetalLB (bare-metal LoadBalancer) via helmfile, consuming upstream metallb/metallb chart.
-# Lifecycle hook: postsync applies IPAddressPool
+# Lifecycle hook: postsync applies IPAddressPool / L2Advertisement CRDs (timing-sensitive).
 # Chart version pinned. Bump via ./upgrade.sh after verifying the new release.
 
 repositories:

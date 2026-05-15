@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # Per-class Phase 6 cutover automation script
 #
-# Usage
+# Usage:
 #   ./cutover.sh <class>
 #     <class>: a..j (public class) or default (main nginx to ngf, run last)
 #
-# Steps
+# Steps:
 #   [1] ingress-nginx Deployment → replicas=0
 #   [2] ingress-nginx Service type → ClusterIP (release MetalLB real IP)
 #   [3] Update IP and comment in the proxy block of manifests/nginxproxies.yaml
@@ -23,7 +23,7 @@
 
 set -euo pipefail
 
-# Resolve script path portably across bash and zsh
+# Resolve script path portably across bash and zsh (BASH_SOURCE -> $0 fallback).
 _SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd "$(dirname "$_SCRIPT_PATH")" && pwd)"
 unset _SCRIPT_PATH
@@ -60,7 +60,7 @@ warn() { printf '\n\033[1;33m[warn]\033[0m %s\n' "$*"; }
 die()  { printf '\n\033[1;31m[fail]\033[0m %s\n' "$*" >&2; exit 2; }
 confirm() { read -r -p "$1 [y/N] " a; [[ "$a" =~ ^[Yy]$ ]]; }
 
-# Argument parsing and class mapping
+# Argument parsing and class mapping ─────────────────────────
 [[ $# -eq 1 ]] || usage
 CLASS="$1"
 
@@ -88,20 +88,20 @@ PROXY="${GW}-proxy"
 NGF_SVC="${GW}-ngf"
 VWC="${ING_REL}-admission"
 
-# Dependency check
+# Dependency check ──────────────────────────────────
 for bin in kubectl jq sed curl; do
   command -v "$bin" >/dev/null 2>&1 || die "필수 도구 없음: ${bin}"
 done
 [[ -f "$MANIFEST" ]] || die "manifest 없음: ${MANIFEST}"
 
-# Preflight checks
+# Preflight checks ───────────────────────────────────────
 log "사전 검증: class=${CLASS} (${TEMP_IP} → ${REAL_IP})"
 log "  ingress-nginx release : ${ING_REL}"
 log "  NGF gateway           : ${GW} (service: ${NGF_SVC})"
 log "  NginxProxy CR         : ${PROXY}"
 log "  VWC                   : ${VWC}"
 
-# Verify ingress-nginx Deployment exists
+# Verify ingress-nginx Deployment exists.
 if ! kubectl get deploy "$ING_DEP" -n "$ING_NS" >/dev/null 2>&1; then
   die "ingress-nginx Deployment '${ING_DEP}' 없음 — 이미 destroy 됐거나 잘못된 클래스"
 fi
@@ -112,19 +112,19 @@ GW_PROG=$(kubectl get gateway "$GW" -n "$NGF_NS" -o jsonpath='{.status.condition
 
 log "  현재 상태: ing-replicas=${ING_REPLICAS}, ing-svc-type=${ING_SVC_TYPE:-없음}, ngf-ip=${NGF_CUR_IP:-없음}, gw-programmed=${GW_PROG:-없음}"
 
-# Exit if everything is already done
+# Exit if everything is already done.
 if [[ "$ING_REPLICAS" == "0" && "$ING_SVC_TYPE" == "ClusterIP" && "$NGF_CUR_IP" == "$REAL_IP" ]]; then
   log "이 클래스는 이미 cutover 완료 상태입니다. 아무 작업 없이 종료."
   exit 0
 fi
 
-# Validate that the state allows proceeding
+# Validate that the state allows proceeding.
 [[ "$GW_PROG" == "True" ]] || die "Gateway '${GW}' Programmed=${GW_PROG:-없음} — 진행 불가"
 
-# Validate manifest structure
+# Validate manifest structure.
 grep -q "name: ${PROXY}\$" "$MANIFEST" || die "${MANIFEST} 에 ${PROXY} 항목 없음"
 
-# Collect attached HTTPRoutes and pick the smoke-test host
+# Collect attached HTTPRoutes and pick the smoke-test host ──────
 ROUTES_JSON=$(kubectl get httproute -A -o json)
 ATTACHED_LIST=$(echo "$ROUTES_JSON" | jq -r --arg gw "$GW" --arg ns "$NGF_NS" \
   '.items[] | select(.spec.parentRefs[]? | .name == $gw and ((.namespace // $ns) == $ns)) | "\(.metadata.namespace)/\(.metadata.name)  hosts=\(.spec.hostnames // [] | join(","))"')
@@ -139,7 +139,7 @@ else
   warn "이 Gateway 에 부착된 HTTPRoute 없음 — 스모크 테스트는 직접 실행 필요"
 fi
 
-# Change summary and confirmation
+# Change summary and confirmation ────────────────────────────────
 echo ""
 log "변경 요약:"
 log "  [1] kubectl scale deploy/${ING_DEP} -n ${ING_NS} --replicas=0"
@@ -155,7 +155,7 @@ log "예상 다운타임: ~30초-1분 (step [2] ~ step [5] 구간)"
 echo ""
 confirm "진행하시겠습니까?" || { log "사용자 취소"; exit 0; }
 
-# Execution
+# Execution ────────────────────────────────────────────
 if [[ "$ING_REPLICAS" == "0" ]]; then
   log "[1/8] scale=0 이미 적용됨, 스킵"
 else
@@ -215,7 +215,7 @@ else
   warn "  호스트 미검출 — 수동 확인 필요"
 fi
 
-# Follow-up guidance
+# Follow-up guidance ───────────────────────────────────────
 echo ""
 log "✓ Cutover 완료: class=${CLASS}  ${TEMP_IP} → ${REAL_IP}"
 echo ""

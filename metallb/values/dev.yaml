@@ -1,5 +1,5 @@
 # =============================================================================
-# MetalLB Custom Values — ServiceMonitor for Prometheus
+# MetalLB Custom Values — ServiceMonitor + speaker scheduling
 # =============================================================================
 prometheus:
   # Required for ServiceMonitor RBAC
@@ -15,3 +15,16 @@ prometheus:
       additionalLabels:
         release: kube-prometheus-stack
     jobLabel: "app.kubernetes.io/name"
+
+# -----------------------------------------------------------------------------
+# Speaker DaemonSet — extra tolerations on top of chart defaults.
+# Chart's `speaker.tolerations` is APPEND, so chart defaults (`node-role.kubernetes.io/master:NoSchedule`, `node-role.kubernetes.io/control-plane:NoSchedule`) are already in the rendered Pod spec — listing them here only causes duplicates. We add ONLY what's not already covered.
+# Prefer specific taints over a wildcard so future dedicated nodes (e.g. GPU) stay excluded unless explicitly added.
+# -----------------------------------------------------------------------------
+speaker:
+  tolerations:
+    # Added 2026-05-12 — dedicated=ci-build:NoSchedule on k8s-compute-04 (GitLab Runner builder node) so speaker can BGP/L2-announce LB endpoints that may land here.
+    - key: dedicated
+      operator: Equal
+      value: ci-build
+      effect: NoSchedule

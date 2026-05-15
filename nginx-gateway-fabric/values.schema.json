@@ -79,6 +79,14 @@
       "title": "clusterDomain",
       "type": "string"
     },
+    "extraObjects": {
+      "description": "A list of extra Kubernetes manifests to deploy. Each item is a raw YAML string representing a complete\nKubernetes resource. Useful for deploying additional resources (e.g. ConfigMaps, Secrets, NetworkPolicies)\nalongside the chart without creating a separate chart.",
+      "items": {
+        "required": []
+      },
+      "title": "extraObjects",
+      "type": "array"
+    },
     "gateways": {
       "description": "A list of Gateway objects. View https://gateway-api.sigs.k8s.io/reference/spec/#gateway for full Gateway reference.",
       "items": {
@@ -420,6 +428,25 @@
               "required": [],
               "type": "object"
             },
+            "waf": {
+              "description": "WAF configures NGINX App Protect WAF.",
+              "properties": {
+                "bundleFailOpen": {
+                  "description": "BundleFailOpen controls the behavior when a WAF policy bundle has not yet been successfully fetched. When true, traffic is served without WAF protection until the bundle is available. When false (default), configuration is withheld until the bundle is fetched.",
+                  "type": "boolean"
+                },
+                "disableCookieSeed": {
+                  "description": "DisableCookieSeed disables the app_protect_cookie_seed directive.",
+                  "type": "boolean"
+                },
+                "enabled": {
+                  "description": "Enabled enables NGINX App Protect WAF functionality.",
+                  "type": "boolean"
+                }
+              },
+              "required": [],
+              "type": "object"
+            },
             "workerConnections": {
               "description": "The number of worker connections for NGINX. Default is 1024.",
               "maximum": 65535,
@@ -456,7 +483,7 @@
               "type": "array"
             },
             "lifecycle": {
-              "description": "The lifecycle of the NGINX container.",
+              "description": "The lifecycle hooks for the NGINX container. See https://kubernetes.io/docs/tasks/configure-pod-container/define-lifecycle-hook/",
               "required": [],
               "title": "lifecycle",
               "type": "object"
@@ -511,7 +538,7 @@
               "type": "string"
             },
             "tag": {
-              "default": "2.5.1",
+              "default": "2.6.0",
               "title": "tag",
               "type": "string"
             }
@@ -731,6 +758,12 @@
           "required": [],
           "title": "usage",
           "type": "object"
+        },
+        "wafContainers": {
+          "description": "Configuration for NGINX App Protect WAF v5 containers.\nThese containers are only deployed when WAF is enabled via nginx.config.waf.enable: true.\nAll settings are optional overrides - defaults are provided by NGF.",
+          "required": [],
+          "title": "wafContainers",
+          "type": "object"
         }
       },
       "required": [],
@@ -937,7 +970,7 @@
               "type": "string"
             },
             "tag": {
-              "default": "2.5.1",
+              "default": "2.6.0",
               "title": "tag",
               "type": "string"
             }
@@ -980,7 +1013,7 @@
           "type": "object"
         },
         "lifecycle": {
-          "description": "The lifecycle of the nginx-gateway container.",
+          "description": "The lifecycle hooks for the nginx-gateway container. See https://kubernetes.io/docs/tasks/configure-pod-container/define-lifecycle-hook/",
           "required": [],
           "title": "lifecycle",
           "type": "object"
@@ -1058,10 +1091,25 @@
               "title": "enable",
               "type": "boolean"
             },
+            "failureThreshold": {
+              "default": 3,
+              "description": "The number of retries after a failed probe before marking the container as Unready.",
+              "minimum": 1,
+              "title": "failureThreshold",
+              "type": "integer"
+            },
             "initialDelaySeconds": {
               "default": 3,
               "description": "The number of seconds after the Pod has started before the readiness probes are initiated.",
+              "minimum": 0,
               "title": "initialDelaySeconds",
+              "type": "integer"
+            },
+            "periodSeconds": {
+              "default": 10,
+              "description": "How often (in seconds) to perform the readiness probe.",
+              "minimum": 1,
+              "title": "periodSeconds",
               "type": "integer"
             },
             "port": {
@@ -1070,6 +1118,20 @@
               "maximum": 65535,
               "minimum": 1,
               "title": "port",
+              "type": "integer"
+            },
+            "successThreshold": {
+              "default": 1,
+              "description": "Minimum consecutive successes for the probe to be considered successful after having failed.",
+              "minimum": 1,
+              "title": "successThreshold",
+              "type": "integer"
+            },
+            "timeoutSeconds": {
+              "default": 1,
+              "description": "Number of seconds after which the probe times out.",
+              "minimum": 1,
+              "title": "timeoutSeconds",
               "type": "integer"
             }
           },
