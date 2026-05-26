@@ -10,9 +10,9 @@ Manages the [MetalLB](https://metallb.universe.tf/) load balancer on a Kubernete
 metallb/
 ├── Chart.yaml              # Version tracking (no local templates)
 ├── helmfile.yaml           # Helmfile release definition (uses remote chart)
-├── values.yaml             # Upstream default values (auto-managed by upgrade.sh)
+├── values.yaml             # Upstream default values (auto-managed by upgrade.py)
 ├── metallb-config.yaml     # IPAddressPool + L2Advertisement CRD configuration
-├── upgrade.sh              # Version upgrade script
+├── upgrade.py              # Version upgrade script
 ├── backup/                 # Auto-backup on upgrade
 └── README.md
 ```
@@ -98,16 +98,16 @@ kubectl get ipaddresspool,l2advertisement -n metallb
 
 ```bash
 # Check latest version and upgrade
-./upgrade.sh
+./upgrade.py
 
 # Preview changes only
-./upgrade.sh --dry-run
+./upgrade.py --dry-run
 
 # Upgrade to a specific version
-./upgrade.sh --version 0.16.0
+./upgrade.py --version 0.16.0
 ```
 
-upgrade.sh automatically performs the following:
+upgrade.py automatically performs the following:
 1. Check current/latest version
 2. Download Chart.yaml, values.yaml and compare diffs
 3. Create backup then update files
@@ -115,9 +115,9 @@ upgrade.sh automatically performs the following:
 ### Rollback
 
 ```bash
-./upgrade.sh --list-backups
-./upgrade.sh --rollback
-./upgrade.sh --cleanup-backups
+./upgrade.py --list-backups
+./upgrade.py --rollback
+./upgrade.py --cleanup-backups
 ```
 
 ### Deploy After Upgrade

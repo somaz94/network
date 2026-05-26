@@ -12,7 +12,7 @@ Maps the 11 IngressClasses (`nginx`, `nginx-public-a~j`) 1:1 to 11 GatewayClasse
 nginx-gateway-fabric/
 ├── Chart.yaml                   # NGF upstream chart version (version + appVersion = single source)
 ├── helmfile.yaml.gotmpl         # Two releases (controller + cr) — auto-reads each Chart.yaml
-├── values.yaml                  # Upstream NGF defaults (managed by upgrade.sh, placeholder)
+├── values.yaml                  # Upstream NGF defaults (managed by upgrade.py, placeholder)
 ├── values/
 │   ├── dev.yaml                # NGF controller custom settings (replicas, metrics, etc.)
 │   └── dev-cr.yaml             # cr release env values (11 Gateway + NginxProxy + ServiceMonitor)
@@ -20,7 +20,7 @@ nginx-gateway-fabric/
 │   ├── Chart.yaml               # Version pin (helmfile readFile reference)
 │   ├── values.yaml              # External chart defaults reference (actual values: values/dev-cr.yaml)
 │   └── values.schema.json       # JSON Schema — local IDE / CI validation
-├── upgrade.sh                   # NGF controller upgrade (external-oci, GitHub Releases API)
+├── upgrade.py                   # NGF controller upgrade (external-oci, GitHub Releases API)
 ├── README.md / README-en.md
 └── backup/
 ```
@@ -135,20 +135,20 @@ No LB IP conflict with ingress-nginx → both can coexist throughout Phase 1-5.
 
 ## Upgrade
 
-NGF is shipped as an **OCI Helm chart**, so `helm search repo` does not work. The `external-oci.sh` canonical instead queries the GitHub Releases API (`api.github.com/repos/nginx/nginx-gateway-fabric/releases/latest`) to discover the latest tag.
+NGF is shipped as an **OCI Helm chart**, so `helm search repo` does not work. The `external-oci.py` canonical instead queries the GitHub Releases API (`api.github.com/repos/nginx/nginx-gateway-fabric/releases/latest`) to discover the latest tag.
 
 ```bash
 # Auto-detect (latest release tag → strip 'v' prefix → chart version)
-./upgrade.sh --dry-run
-./upgrade.sh
+./upgrade.py --dry-run
+./upgrade.py
 
 # Pin a specific version
-./upgrade.sh --version 2.6.0
+./upgrade.py --version 2.6.0
 ```
 
 > **GitHub API rate limit**: 60 req/h anonymous. For CI or high-frequency use, set `GITHUB_TOKEN=ghp_...` for authenticated calls (5,000 req/h).
 
-`./upgrade.sh` updates `Chart.yaml`'s `version` and `appVersion`. The helmfile.yaml.gotmpl needs no edit — helmfile picks up the new versions on the next `helmfile diff`/`apply`.
+`./upgrade.py` updates `Chart.yaml`'s `version` and `appVersion`. The helmfile.yaml.gotmpl needs no edit — helmfile picks up the new versions on the next `helmfile diff`/`apply`.
 
 ```bash
 helmfile diff
@@ -158,8 +158,8 @@ helmfile apply
 ### Rollback
 
 ```bash
-./upgrade.sh --list-backups
-./upgrade.sh --rollback
+./upgrade.py --list-backups
+./upgrade.py --rollback
 helmfile diff
 helmfile apply
 ```

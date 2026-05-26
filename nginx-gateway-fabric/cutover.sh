@@ -36,21 +36,21 @@ usage() {
 Usage: cutover.sh <class>
 
   <class>:
-    a..j     : public 클래스 (개별)
-    default  : main nginx → ngf  (.69 → .55, 프로덕션 핵심 — 마지막 실행)
+    a..j     : public class (individual)
+    default  : main nginx -> ngf  (.69 -> .55, production critical -- run last)
 
-클래스 매핑 (임시 IP → 실 IP):
-  a       : .70 → .56    (ingress-nginx-public-a → ngf-public-a)
-  b       : .71 → .57    (ingress-nginx-public-b → ngf-public-b)
-  c       : .72 → .58    (ingress-nginx-public-c → ngf-public-c)
-  d       : .73 → .62    (ingress-nginx-public-d → ngf-public-d)
-  e       : .74 → .63    (ingress-nginx-public-e → ngf-public-e)
-  f       : .75 → .64    (ingress-nginx-public-f → ngf-public-f)
-  g       : .76 → .65    (ingress-nginx-public-g → ngf-public-g)
-  h       : .77 → .66    (ingress-nginx-public-h → ngf-public-h)
-  i       : .78 → .67    (ingress-nginx-public-i → ngf-public-i)
-  j       : .79 → .68    (ingress-nginx-public-j → ngf-public-j)
-  default : .69 → .55    (ingress-nginx → ngf  ← 마지막)
+Class mapping (temp IP -> real IP):
+  a       : .70 -> .56    (ingress-nginx-public-a -> ngf-public-a)
+  b       : .71 -> .57    (ingress-nginx-public-b -> ngf-public-b)
+  c       : .72 -> .58    (ingress-nginx-public-c -> ngf-public-c)
+  d       : .73 -> .62    (ingress-nginx-public-d -> ngf-public-d)
+  e       : .74 -> .63    (ingress-nginx-public-e -> ngf-public-e)
+  f       : .75 -> .64    (ingress-nginx-public-f -> ngf-public-f)
+  g       : .76 -> .65    (ingress-nginx-public-g -> ngf-public-g)
+  h       : .77 -> .66    (ingress-nginx-public-h -> ngf-public-h)
+  i       : .78 -> .67    (ingress-nginx-public-i -> ngf-public-i)
+  j       : .79 -> .68    (ingress-nginx-public-j -> ngf-public-j)
+  default : .69 -> .55    (ingress-nginx -> ngf  <- last)
 EOF
   exit 1
 }
@@ -90,12 +90,12 @@ VWC="${ING_REL}-admission"
 
 # Dependency check ──────────────────────────────────
 for bin in kubectl jq sed curl; do
-  command -v "$bin" >/dev/null 2>&1 || die "필수 도구 없음: ${bin}"
+  command -v "$bin" >/dev/null 2>&1 || die "required tool not found: ${bin}"
 done
-[[ -f "$MANIFEST" ]] || die "manifest 없음: ${MANIFEST}"
+[[ -f "$MANIFEST" ]] || die "manifest not found: ${MANIFEST}"
 
 # Preflight checks ───────────────────────────────────────
-log "사전 검증: class=${CLASS} (${TEMP_IP} → ${REAL_IP})"
+log "preflight: class=${CLASS} (${TEMP_IP} -> ${REAL_IP})"
 log "  ingress-nginx release : ${ING_REL}"
 log "  NGF gateway           : ${GW} (service: ${NGF_SVC})"
 log "  NginxProxy CR         : ${PROXY}"
@@ -103,26 +103,26 @@ log "  VWC                   : ${VWC}"
 
 # Verify ingress-nginx Deployment exists.
 if ! kubectl get deploy "$ING_DEP" -n "$ING_NS" >/dev/null 2>&1; then
-  die "ingress-nginx Deployment '${ING_DEP}' 없음 — 이미 destroy 됐거나 잘못된 클래스"
+  die "ingress-nginx Deployment '${ING_DEP}' not found -- already destroyed or wrong class"
 fi
 ING_REPLICAS=$(kubectl get deploy "$ING_DEP" -n "$ING_NS" -o jsonpath='{.spec.replicas}')
 ING_SVC_TYPE=$(kubectl get svc "$ING_SVC" -n "$ING_NS" -o jsonpath='{.spec.type}' 2>/dev/null || echo "")
 NGF_CUR_IP=$(kubectl get svc "$NGF_SVC" -n "$NGF_NS" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
 GW_PROG=$(kubectl get gateway "$GW" -n "$NGF_NS" -o jsonpath='{.status.conditions[?(@.type=="Programmed")].status}' 2>/dev/null || echo "")
 
-log "  현재 상태: ing-replicas=${ING_REPLICAS}, ing-svc-type=${ING_SVC_TYPE:-없음}, ngf-ip=${NGF_CUR_IP:-없음}, gw-programmed=${GW_PROG:-없음}"
+log "  current state: ing-replicas=${ING_REPLICAS}, ing-svc-type=${ING_SVC_TYPE:-none}, ngf-ip=${NGF_CUR_IP:-none}, gw-programmed=${GW_PROG:-none}"
 
 # Exit if everything is already done.
 if [[ "$ING_REPLICAS" == "0" && "$ING_SVC_TYPE" == "ClusterIP" && "$NGF_CUR_IP" == "$REAL_IP" ]]; then
-  log "이 클래스는 이미 cutover 완료 상태입니다. 아무 작업 없이 종료."
+  log "this class is already cutover-complete. exiting with no action."
   exit 0
 fi
 
 # Validate that the state allows proceeding.
-[[ "$GW_PROG" == "True" ]] || die "Gateway '${GW}' Programmed=${GW_PROG:-없음} — 진행 불가"
+[[ "$GW_PROG" == "True" ]] || die "Gateway '${GW}' Programmed=${GW_PROG:-none} -- cannot proceed"
 
 # Validate manifest structure.
-grep -q "name: ${PROXY}\$" "$MANIFEST" || die "${MANIFEST} 에 ${PROXY} 항목 없음"
+grep -q "name: ${PROXY}\$" "$MANIFEST" || die "${PROXY} entry not found in ${MANIFEST}"
 
 # Collect attached HTTPRoutes and pick the smoke-test host ──────
 ROUTES_JSON=$(kubectl get httproute -A -o json)
@@ -132,59 +132,59 @@ SMOKE_HOST=$(echo "$ROUTES_JSON" | jq -r --arg gw "$GW" --arg ns "$NGF_NS" \
   '[.items[] | select(.spec.parentRefs[]? | .name == $gw and ((.namespace // $ns) == $ns))][0].spec.hostnames[0] // empty')
 
 if [[ -n "$ATTACHED_LIST" ]]; then
-  log "이 Gateway 에 부착된 HTTPRoute (values ingress.enabled:false 토글 대상):"
+  log "HTTPRoutes attached to this Gateway (toggle ingress.enabled:false in their values):"
   echo "$ATTACHED_LIST" | sed 's/^/    /'
-  log "스모크 테스트 호스트: ${SMOKE_HOST:-없음}"
+  log "smoke test host: ${SMOKE_HOST:-none}"
 else
-  warn "이 Gateway 에 부착된 HTTPRoute 없음 — 스모크 테스트는 직접 실행 필요"
+  warn "no HTTPRoute attached to this Gateway -- smoke test must be run manually"
 fi
 
 # Change summary and confirmation ────────────────────────────────
 echo ""
-log "변경 요약:"
+log "change summary:"
 log "  [1] kubectl scale deploy/${ING_DEP} -n ${ING_NS} --replicas=0"
-log "  [2] kubectl patch svc ${ING_SVC} -n ${ING_NS} → ClusterIP (${REAL_IP} 해제)"
-log "  [3] sed: manifest 내 ${PROXY} 블록 ${TEMP_IP} → ${REAL_IP} + 주석 갱신"
-log "  [4] kubectl diff -f manifests/nginxproxies.yaml  (프리뷰)"
+log "  [2] kubectl patch svc ${ING_SVC} -n ${ING_NS} -> ClusterIP (release ${REAL_IP})"
+log "  [3] sed: ${PROXY} block in manifest ${TEMP_IP} -> ${REAL_IP} + update comment"
+log "  [4] kubectl diff -f manifests/nginxproxies.yaml  (preview)"
 log "  [5] kubectl apply -f manifests/nginxproxies.yaml"
-log "  [6] wait: ${NGF_SVC} EXTERNAL-IP → ${REAL_IP}"
+log "  [6] wait: ${NGF_SVC} EXTERNAL-IP -> ${REAL_IP}"
 log "  [7] kubectl delete vwc ${VWC}"
-log "  [8] smoke: curl --resolve ${SMOKE_HOST:-<없음>}:80:${REAL_IP}"
+log "  [8] smoke: curl --resolve ${SMOKE_HOST:-<none>}:80:${REAL_IP}"
 log ""
-log "예상 다운타임: ~30초-1분 (step [2] ~ step [5] 구간)"
+log "expected downtime: ~30s-1min (between step [2] and step [5])"
 echo ""
-confirm "진행하시겠습니까?" || { log "사용자 취소"; exit 0; }
+confirm "proceed?" || { log "cancelled by user"; exit 0; }
 
 # Execution ────────────────────────────────────────────
 if [[ "$ING_REPLICAS" == "0" ]]; then
-  log "[1/8] scale=0 이미 적용됨, 스킵"
+  log "[1/8] scale=0 already applied, skip"
 else
-  log "[1/8] ingress-nginx Deployment 스케일 다운"
+  log "[1/8] scale down ingress-nginx Deployment"
   kubectl scale deploy/"$ING_DEP" -n "$ING_NS" --replicas=0
 fi
 
 if [[ "$ING_SVC_TYPE" == "ClusterIP" ]]; then
-  log "[2/8] Service 이미 ClusterIP, 스킵"
+  log "[2/8] Service already ClusterIP, skip"
 else
-  log "[2/8] ingress-nginx Service → ClusterIP (MetalLB IP 해제)"
+  log "[2/8] ingress-nginx Service -> ClusterIP (release MetalLB IP)"
   kubectl patch svc "$ING_SVC" -n "$ING_NS" --type=json \
     -p='[{"op":"replace","path":"/spec/type","value":"ClusterIP"},{"op":"remove","path":"/spec/loadBalancerIP"}]'
 fi
 
-log "[3/8] manifest 편집: ${TEMP_IP} → ${REAL_IP} (${PROXY} 블록)"
+log "[3/8] edit manifest: ${TEMP_IP} -> ${REAL_IP} (${PROXY} block)"
 # BSD sed compatible (macOS); block range spans from the name line through that block's loadBalancerIP line.
 sed -i '' \
   -e "/name: ${PROXY}\$/,/loadBalancerIP/ s|\"${TEMP_IP}\"|\"${REAL_IP}\"|" \
-  -e "/name: ${PROXY}\$/,/loadBalancerIP/ s|# Phase 1 임시 (cutover 시 ${REAL_IP})|# Phase 6 cutover 완료 (was ${TEMP_IP})|" \
+  -e "/name: ${PROXY}\$/,/loadBalancerIP/ s|# Phase 1 temporary (will become ${REAL_IP} at cutover)|# Phase 6 cutover complete (was ${TEMP_IP})|" \
   "$MANIFEST"
 
-log "[4/8] kubectl diff 프리뷰 (exit 1은 diff 있음을 의미, 정상)"
+log "[4/8] kubectl diff preview (exit 1 means diff present, normal)"
 kubectl diff -f "$MANIFEST" || true
 
 log "[5/8] kubectl apply"
 kubectl apply -f "$MANIFEST"
 
-log "[6/8] NGF Service EXTERNAL-IP 대기 (max 30s)"
+log "[6/8] wait for NGF Service EXTERNAL-IP (max 30s)"
 CUR=""
 for i in $(seq 1 15); do
   CUR=$(kubectl get svc "$NGF_SVC" -n "$NGF_NS" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "")
@@ -194,12 +194,12 @@ for i in $(seq 1 15); do
   fi
   sleep 2
 done
-[[ "$CUR" == "$REAL_IP" ]] || warn "타임아웃: 현재 EXTERNAL-IP=${CUR:-없음} (MetalLB announcement 지연일 수 있음)"
+[[ "$CUR" == "$REAL_IP" ]] || warn "timeout: current EXTERNAL-IP=${CUR:-none} (may be MetalLB announcement delay)"
 
-log "[7/8] VWC 삭제: ${VWC}"
+log "[7/8] delete VWC: ${VWC}"
 kubectl delete validatingwebhookconfiguration "$VWC" --ignore-not-found
 
-log "[8/8] 스모크 테스트"
+log "[8/8] smoke test"
 if [[ -n "$SMOKE_HOST" ]]; then
   # curl: on failure -w still prints 000 and exits non-zero; instead of appending `|| echo`,
   # suppress stderr and check success and failure separately.
@@ -207,24 +207,24 @@ if [[ -n "$SMOKE_HOST" ]]; then
     --max-time 5 --resolve "${SMOKE_HOST}:80:${REAL_IP}" "http://${SMOKE_HOST}/" 2>/dev/null)
   CODE="${CODE:-000}"
   if [[ "$CODE" != "000" && "$CODE" != "0" ]]; then
-    log "  ✓ HTTP ${CODE}  host=${SMOKE_HOST}  →  ${REAL_IP}  (백엔드 도달 성공)"
+    log "  ✓ HTTP ${CODE}  host=${SMOKE_HOST}  ->  ${REAL_IP}  (backend reachable)"
   else
-    warn "  curl 연결 실패 — ARP 캐시 또는 네트워크 경로 확인"
+    warn "  curl connection failed -- check ARP cache or network path"
   fi
 else
-  warn "  호스트 미검출 — 수동 확인 필요"
+  warn "  no host detected -- manual verification required"
 fi
 
 # Follow-up guidance ───────────────────────────────────────
 echo ""
-log "✓ Cutover 완료: class=${CLASS}  ${TEMP_IP} → ${REAL_IP}"
+log "✓ Cutover complete: class=${CLASS}  ${TEMP_IP} -> ${REAL_IP}"
 echo ""
-log "남은 수동 작업:"
-log "  1) 위 'Gateway 부착 HTTPRoute' 각각의 소스 values에서 \`ingress.enabled: false\`:"
+log "remaining manual steps:"
+log "  1) Set \`ingress.enabled: false\` in the source values of each 'Gateway-attached HTTPRoute' above:"
 log "     - ApplicationSet  : argocd-applicationset/values/<project>/<service>/<env>.values.yaml"
-log "     - kuberntes-infra : 해당 컴포넌트의 values/dev.yaml 또는 manifest"
-log "     - 별도 레포       : git-bridge, slack-qr-bot 등 해당 레포 k8s/deployment.yaml"
-log "  2) 커밋·푸시 후 ArgoCD/helmfile sync"
-log "  3) 만약 Ingress 가 잔존한다면 (finalizer stuck):"
+log "     - kuberntes-infra : values/dev.yaml or manifest of the component"
+log "     - separate repos  : git-bridge, slack-qr-bot, etc. -- their k8s/deployment.yaml"
+log "  2) commit + push, then ArgoCD/helmfile sync"
+log "  3) If Ingress remains (finalizer stuck):"
 log "       kubectl patch ingress <name> -n <ns> -p '{\"metadata\":{\"finalizers\":null}}' --type=merge"
-log "  4) 이 클래스의 helm release 는 ~1주 관측 후 일괄 'helmfile destroy' 대상"
+log "  4) After ~1 week of observation, bulk 'helmfile destroy' this class's helm releases"
