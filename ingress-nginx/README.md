@@ -50,17 +50,17 @@ ingress-nginx/
 ├── helmfile.yaml           # Helmfile release definition (uses remote chart)
 ├── values.yaml             # Upstream default values (auto-managed by upgrade.sh)
 ├── values/
-│   ├── mgmt.yaml                # Default management release values
-│   ├── mgmt-public-a.yaml      # Public release A values
-│   ├── mgmt-public-b.yaml      # Public release B values
-│   ├── mgmt-public-c.yaml      # Public release C values
-│   ├── mgmt-public-d.yaml      # Public release D values
-│   ├── mgmt-public-e.yaml      # Public release E values
-│   ├── mgmt-public-f.yaml      # Public release F values
-│   ├── mgmt-public-g.yaml      # Public release G values
-│   ├── mgmt-public-h.yaml      # Public release H values
-│   ├── mgmt-public-i.yaml      # Public release I values
-│   └── mgmt-public-j.yaml      # Public release J values
+│   ├── dev-mgmt.yaml           # Default management release values
+│   ├── dev-public-a.yaml       # Public release A values
+│   ├── dev-public-b.yaml       # Public release B values
+│   ├── dev-public-c.yaml       # Public release C values
+│   ├── dev-public-d.yaml       # Public release D values
+│   ├── dev-public-e.yaml       # Public release E values
+│   ├── dev-public-f.yaml       # Public release F values
+│   ├── dev-public-g.yaml       # Public release G values
+│   ├── dev-public-h.yaml       # Public release H values
+│   ├── dev-public-i.yaml       # Public release I values
+│   └── dev-public-j.yaml       # Public release J values
 ├── upgrade.sh              # Version upgrade script
 ├── backup/                 # Auto-backup on upgrade
 └── README.md
@@ -104,17 +104,17 @@ Composed of 11 Helm releases in total:
 
 | Release | Values File | Description |
 |---------|-------------|-------------|
-| `ingress-nginx` | `values/mgmt.yaml` | Default management |
-| `ingress-nginx-public-a` | `values/mgmt-public-a.yaml` | Public release A |
-| `ingress-nginx-public-b` | `values/mgmt-public-b.yaml` | Public release B |
-| `ingress-nginx-public-c` | `values/mgmt-public-c.yaml` | Public release C |
-| `ingress-nginx-public-d` | `values/mgmt-public-d.yaml` | Public release D |
-| `ingress-nginx-public-e` | `values/mgmt-public-e.yaml` | Public release E |
-| `ingress-nginx-public-f` | `values/mgmt-public-f.yaml` | Public release F |
-| `ingress-nginx-public-g` | `values/mgmt-public-g.yaml` | Public release G |
-| `ingress-nginx-public-h` | `values/mgmt-public-h.yaml` | Public release H |
-| `ingress-nginx-public-i` | `values/mgmt-public-i.yaml` | Public release I |
-| `ingress-nginx-public-j` | `values/mgmt-public-j.yaml` | Public release J |
+| `ingress-nginx` | `values/dev-mgmt.yaml` | Default management |
+| `ingress-nginx-public-a` | `values/dev-public-a.yaml` | Public release A |
+| `ingress-nginx-public-b` | `values/dev-public-b.yaml` | Public release B |
+| `ingress-nginx-public-c` | `values/dev-public-c.yaml` | Public release C |
+| `ingress-nginx-public-d` | `values/dev-public-d.yaml` | Public release D |
+| `ingress-nginx-public-e` | `values/dev-public-e.yaml` | Public release E |
+| `ingress-nginx-public-f` | `values/dev-public-f.yaml` | Public release F |
+| `ingress-nginx-public-g` | `values/dev-public-g.yaml` | Public release G |
+| `ingress-nginx-public-h` | `values/dev-public-h.yaml` | Public release H |
+| `ingress-nginx-public-i` | `values/dev-public-i.yaml` | Public release I |
+| `ingress-nginx-public-j` | `values/dev-public-j.yaml` | Public release J |
 
 <br/>
 

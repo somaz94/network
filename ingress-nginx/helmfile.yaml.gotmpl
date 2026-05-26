@@ -26,7 +26,7 @@ releases:
       variant: {{ $variant }}
       app: ingress-nginx
     values:
-      - values/{{ if eq $variant "mgmt" }}mgmt{{ else }}mgmt-{{ $variant }}{{ end }}.yaml
+      - values/dev-{{ $variant }}.yaml
 {{- end }}
 
 # 2025-XX disabled — beta chart test slot (4.12.0-beta.0), local Chart, never wired up.
@@ -35,7 +35,7 @@ releases:
 #   chart: .
 #   version: 4.12.0-beta.0
 #   values:
-#     - values/mgmt.yaml
+#     - values/dev-mgmt.yaml
 
 # Ensure namespace before sync (idempotent no-op when present).
 # kubectl args aren't shell-parsed → use sh -c to evaluate || true.
