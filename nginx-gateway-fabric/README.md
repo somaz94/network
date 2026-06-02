@@ -53,7 +53,7 @@ Each release's chart version comes from a local `Chart.yaml`, read via `readFile
 
 | Topic | Document |
 |---|---|
-| TLS wildcard certificate setup (self-signed, 10 years) | [docs/tls-wildcard-setup-en.md](docs/tls-wildcard-setup-en.md) |
+| TLS wildcard certificate setup (self-signed, 10 years) | [docs/tls-wildcard-setup-en.md](docs/tls-wildcard-setup.md) |
 
 <br/>
 

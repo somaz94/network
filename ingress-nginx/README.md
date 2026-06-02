@@ -1,6 +1,6 @@
 # Ingress-Nginx Helm Chart (`_optional/` archive)
 
-> **Status**: Retired on 2026-04-17. Fully replaced by [nginx-gateway-fabric](../../nginx-gateway-fabric/) (NGF 2.x).
+> **Status**: Retired on 2026-04-17. Fully replaced by [nginx-gateway-fabric](../nginx-gateway-fabric/) (NGF 2.x).
 > This directory is kept for rollback reference and Git history only.
 
 Helmfile-based Ingress-Nginx controller configuration that was previously deployed on the cluster.
