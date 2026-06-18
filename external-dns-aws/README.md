@@ -1,8 +1,8 @@
-# External-DNS (AWS Route53) Helm Chart (`_optional/`)
+# External-DNS (AWS Route53) Helm Chart
 
-> **Status**: `_optional/` component. Enable only when the cluster fronts AWS-managed DNS zones (Route53). When promoting to active use, move to `network/external-dns-aws/` so it is included in sync drift checks.
+> **Status**: Active component. Manages the Route53 zone `example.com` for the `prod-example-app-v1` cluster (eu-central-1, account 123456789012). Authentication uses an EKS Pod Identity association (namespace `external-dns` / SA `external-dns`).
 
-Helmfile-managed deployment of [ExternalDNS](https://github.com/kubernetes-sigs/external-dns/) that synchronizes Kubernetes Service / Ingress hostnames into AWS Route53 records. Authentication is IRSA-based (IAM Role for Service Account on EKS).
+Helmfile-managed deployment of [ExternalDNS](https://github.com/kubernetes-sigs/external-dns/) that synchronizes Kubernetes Service / Ingress hostnames into AWS Route53 records. Authentication is via an EKS Pod Identity association (no `role-arn` annotation on the SA).
 
 <br/>
 
@@ -12,11 +12,11 @@ Helmfile-managed deployment of [ExternalDNS](https://github.com/kubernetes-sigs/
 external-dns-aws/
 ├── Chart.yaml              # Version tracking only (no local templates)
 ├── helmfile.yaml           # Helmfile release definition (upstream chart)
-├── values.yaml             # Upstream defaults (managed by upgrade.sh)
+├── values.yaml             # Upstream defaults (managed by upgrade.py)
 ├── values.schema.json      # Values schema (shipped by upstream)
 ├── values/
-│   └── dev.yaml           # Operational values (domain filter, IRSA Role ARN)
-├── upgrade.sh              # Version bump script
+│   └── prod.yaml          # Operational values (domain filter, Pod Identity auth)
+├── upgrade.py              # Version bump script
 ├── backup/                 # Auto-generated backups (rollback trail)
 └── README.md
 ```
@@ -25,11 +25,11 @@ external-dns-aws/
 
 ## Prerequisites
 
-- Kubernetes cluster (EKS recommended for IRSA)
+- Kubernetes cluster (EKS recommended for Pod Identity)
 - Helm 3, Helmfile
-- AWS Route53 hosted zone (`example-app.secondary-projectsvc.com` or per-environment domain)
-- IAM Role with `ChangeResourceRecordSets` / `ListResourceRecordSets` on the target zone, plus an IRSA trust policy
-- A system nodegroup label (`eks.amazonaws.com/nodegroup` is used for placement)
+- AWS Route53 hosted zone (`example.com` or per-environment domain)
+- IAM Role with `ChangeResourceRecordSets` / `ListResourceRecordSets` on the target zone, plus a Pod Identity trust policy (`pods.eks.amazonaws.com`)
+- A system nodegroup label (`nodegroup-workload=system` is used for placement)
 
 <br/>
 
@@ -53,10 +53,10 @@ helmfile destroy
 
 ## Configuration Highlights
 
-- `domainFilters` — allow-list of domains under management. Defaults to `example-app.secondary-projectsvc.com`.
+- `domainFilters` — allow-list of domains under management. Defaults to `example.com`.
 - `policy: upsert-only` — create when missing, update when present; deletion is left to humans.
 - `registry: txt`, `txtOwnerId`, `txtPrefix` — ownership markers to avoid clobbering records owned by another ExternalDNS instance.
-- `serviceAccount.annotations.eks.amazonaws.com/role-arn` — IRSA-bound IAM Role ARN. Replace per environment.
+- `serviceAccount` — authenticated via a Pod Identity association, so no `eks.amazonaws.com/role-arn` annotation is needed. The IAM Role binding is owned by the Terraform `aws_eks_pod_identity_association`.
 - `nodeSelector` — pins the pod to the system nodegroup.
 - `extraArgs.--annotation-filter` — only objects carrying the matching annotation are reconciled.
 
@@ -66,16 +66,16 @@ helmfile destroy
 
 ```bash
 # Check and bump to the latest version
-./upgrade.sh
+./upgrade.py
 
 # Preview only
-./upgrade.sh --dry-run
+./upgrade.py --dry-run
 
 # Pin to a specific version
-./upgrade.sh --version 1.20.0
+./upgrade.py --version 1.20.0
 ```
 
-`upgrade.sh` automates:
+`upgrade.py` automates:
 1. Resolving current and latest versions
 2. Downloading and diffing `Chart.yaml` / `values.yaml`
 3. Creating a backup before writing the new files
@@ -84,13 +84,13 @@ helmfile destroy
 
 ```bash
 # List backups
-./upgrade.sh --list-backups
+./upgrade.py --list-backups
 
 # Restore from a backup
-./upgrade.sh --rollback
+./upgrade.py --rollback
 
 # Prune old backups (keep the last 5)
-./upgrade.sh --cleanup-backups
+./upgrade.py --cleanup-backups
 ```
 
 ### After upgrading
@@ -98,7 +98,7 @@ helmfile destroy
 ```bash
 helmfile diff
 helmfile apply
-kubectl get pods -n example-app -l app.kubernetes.io/name=external-dns
+kubectl get pods -n external-dns -l app.kubernetes.io/name=external-dns
 ```
 
 <br/>
@@ -119,7 +119,7 @@ helmfile status         # Status
 
 | Symptom | Resolution |
 |---------|------------|
-| Route53 records are not created | Verify the IRSA Role ARN matches and the IAM policy grants `Change/ListResourceRecordSets` |
+| Route53 records are not created | Verify the Pod Identity association is attached and the IAM policy grants `Change/ListResourceRecordSets` |
 | `AccessDenied: not authorized to perform: route53:ChangeResourceRecordSets` | Confirm the IAM policy Resource ARN matches the target zone |
 | Pod Pending | Check that the `nodeSelector` label is present on the system nodegroup |
 | Hostname not picked up | Confirm `domainFilters` matches the hosted zone domain |
