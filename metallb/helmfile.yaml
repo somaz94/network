@@ -1,6 +1,14 @@
-# Deploy MetalLB (bare-metal LoadBalancer) via helmfile, consuming upstream metallb/metallb chart.
-# Lifecycle hook: postsync applies IPAddressPool / L2Advertisement CRDs (timing-sensitive).
-# Chart version pinned. Bump via ./upgrade.sh after verifying the new release.
+# Deploy MetalLB (bare-metal LoadBalancer) via helmfile.
+#
+# Two releases in the `metallb` namespace:
+#   1. metallb     — upstream metallb/metallb chart (controller, speaker, CRDs).
+#   2. metallb-cr  — somaz94/metallb-cr chart, renders the IPAddressPool + L2Advertisement config CRs.
+#
+# The upstream chart does not template config CRs, so these were previously applied
+# out-of-band via a postsync `kubectl apply -f metallb-config.yaml` hook. metallb-cr
+# replaces that hook, so the config is a declarative, version-pinned helmfile release.
+#
+# Chart versions pinned. Bump the upstream chart via ./upgrade.py after verifying the release.
 
 repositories:
   - name: metallb
@@ -11,20 +19,21 @@ releases:
     namespace: metallb
     createNamespace: true
     chart: metallb/metallb
-    version: 0.16.0
+    version: 0.16.1
     wait: true
     timeout: 300
     values:
-      - values/dev.yaml
+      - values/dev-metallb.yaml
 
-# Apply MetalLB CRD config (postsync, runs after controller is ready).
-# `wait: true` on the release ensures the controller pod is Ready before this hook fires,
-# avoiding the validating webhook race that 0.13+ introduced.
-hooks:
-  - events: ["postsync"]
-    showlogs: true
-    command: "kubectl"
-    args:
-      - "apply"
-      - "-f"
-      - "metallb-config.yaml"
+  # Config CRs (IPAddressPool + L2Advertisement).
+  # `needs:` enforces apply ordering after the operator; the metallb release's `wait: true`
+  # ensures the controller Pod is Ready (and the validating webhook is up) before these CRs
+  # apply, avoiding the validating-webhook race that MetalLB 0.13+ introduced.
+  - name: metallb-cr
+    namespace: metallb
+    chart: oci://ghcr.io/somaz94/charts/metallb-cr
+    version: "0.1.0"
+    needs:
+      - metallb/metallb
+    values:
+      - values/dev-metallb-cr.yaml

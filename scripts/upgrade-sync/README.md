@@ -215,7 +215,7 @@ CHART_DIR="$(cd ...)"
 - **CONFIG block** = marker 1 ~ marker 3 (all inclusive)
 - **body** = everything after marker 3
 
-An awk counter tracks markers to find precise boundaries.
+`scripts/python/upgrade_sync/extract.py` matches markers via regex to find precise boundaries.
 
 <br/>
 
@@ -901,9 +901,9 @@ When the existing 3 canonicals don't cover a new pattern.
 
 ### Example scenarios
 
-- **multi-release**: helmfile deploys multiple releases of the same chart in different namespaces and each needs separate version tracking → `external-multi-release.sh`
-- **CRD compatibility check**: charts that need CRD compatibility checks before upgrade → `external-with-crd-check.sh`
-- **bare local chart**: `local-with-templates` minus the custom template management → `local-bare.sh`
+- **multi-release**: helmfile deploys multiple releases of the same chart in different namespaces and each needs separate version tracking → `external-multi-release.py`
+- **CRD compatibility check**: charts that need CRD compatibility checks before upgrade → `external-with-crd-check.py`
+- **bare local chart**: `local-with-templates` minus the custom template management → `local-bare.py`
 
 ### Procedure
 

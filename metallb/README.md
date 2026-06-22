@@ -8,14 +8,22 @@ Manages the [MetalLB](https://metallb.universe.tf/) load balancer on a Kubernete
 
 ```
 metallb/
-├── Chart.yaml              # Version tracking (no local templates)
-├── helmfile.yaml           # Helmfile release definition (uses remote chart)
-├── values.yaml             # Upstream default values (auto-managed by upgrade.py)
-├── metallb-config.yaml     # IPAddressPool + L2Advertisement CRD configuration
-├── upgrade.py              # Version upgrade script
-├── backup/                 # Auto-backup on upgrade
-└── README.md
+├── Chart.yaml                  # Version tracking (no local templates)
+├── helmfile.yaml               # Helmfile release definitions (metallb + metallb-cr)
+├── values.yaml                 # Upstream default values (auto-managed by upgrade.py)
+├── values/
+│   ├── dev-metallb.yaml        # Upstream chart overrides (ServiceMonitor, speaker scheduling)
+│   └── dev-metallb-cr.yaml     # IPAddressPool + L2Advertisement config (somaz94/metallb-cr chart)
+├── upgrade.py                  # Version upgrade script
+├── backup/                     # Auto-backup on upgrade
+├── README.md                   # Korean documentation
+└── README-en.md                # English documentation
 ```
+
+The upstream `metallb/metallb` chart does not template config CRs, so the
+IPAddressPool / L2Advertisement resources are rendered by the `somaz94/metallb-cr`
+chart as a second helmfile release (replacing the former out-of-band
+`kubectl apply -f metallb-config.yaml` postsync hook).
 
 <br/>
 
@@ -47,48 +55,39 @@ helmfile lint
 # Preview changes
 helmfile diff
 
-# Deploy (MetalLB + CRD config applied automatically)
+# Deploy (MetalLB + config CRs applied automatically)
 helmfile apply
 
 # Destroy
 helmfile destroy
 ```
 
-> **Note:** When running `helmfile apply`, the postsync hook automatically applies `metallb-config.yaml`.
-> With the `wait: true` setting, it is applied after the controller Pod is ready, so webhook timing issues do not occur.
+> **Note:** `helmfile apply` deploys two releases — the upstream MetalLB chart and `metallb-cr` (config CRs).
+> The `needs:` ordering plus the metallb release's `wait: true` apply the config CRs only after the controller Pod is ready, so the validating-webhook timing race does not occur.
 
 <br/>
 
 ## MetalLB Config
 
-Configure IP pools and L2 mode in `metallb-config.yaml`.
+Configure IP pools and L2 mode in `values/dev-metallb-cr.yaml` (rendered by the `somaz94/metallb-cr` chart).
 
 ```yaml
-apiVersion: metallb.io/v1beta1
-kind: IPAddressPool
-metadata:
-  name: ip-pool
-  namespace: metallb
-spec:
-  addresses:
-    - 192.168.1.55-192.168.1.58
-    - 192.168.1.62-192.168.1.65
-  autoAssign: true
----
-apiVersion: metallb.io/v1beta1
-kind: L2Advertisement
-metadata:
-  name: l2-network
-  namespace: metallb
-spec:
-  ipAddressPools:
-    - ip-pool
+ipAddressPools:
+  - name: ip-pool
+    addresses:
+      - 192.168.1.55-192.168.1.58
+      - 192.168.1.62-192.168.1.75
+    autoAssign: true
+
+l2Advertisements:
+  - name: l2-network
+    ipAddressPools:
+      - ip-pool
 ```
 
-If manual application is needed:
+The CRs are applied automatically by `helmfile apply`. To inspect:
 
 ```bash
-kubectl apply -f metallb-config.yaml
 kubectl get ipaddresspool,l2advertisement -n metallb
 ```
 

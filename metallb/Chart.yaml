@@ -1,10 +1,10 @@
 apiVersion: v2
-appVersion: v0.16.0
+appVersion: v0.16.1
 dependencies:
 - condition: crds.enabled
   name: crds
   repository: ""
-  version: 0.16.0
+  version: 0.16.1
 - condition: frrk8s.enabled
   name: frr-k8s
   repository: https://metallb.github.io/frr-k8s
@@ -18,5 +18,5 @@ name: metallb
 sources:
 - https://github.com/metallb/metallb
 type: application
-version: 0.16.0
+version: 0.16.1
 

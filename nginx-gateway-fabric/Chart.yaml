@@ -1,5 +1,5 @@
 apiVersion: v2
-appVersion: 2.6.2
+appVersion: 2.6.5
 description: NGINX Gateway Fabric
 home: https://github.com/nginx/nginx-gateway-fabric
 icon: https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/main/charts/nginx-gateway-fabric/chart-icon.png
@@ -15,5 +15,5 @@ name: nginx-gateway-fabric
 sources:
 - https://github.com/nginx/nginx-gateway-fabric/tree/main/charts/nginx-gateway-fabric
 type: application
-version: 2.6.2
+version: 2.6.5
 
