@@ -82,3 +82,12 @@ extraArgs:
   - --aws-zone-type=public
   - --aws-prefer-cname
   - --annotation-filter=external-dns.example-app.kubernetes.io/hostname
+
+# ServiceMonitor for Prometheus auto-discovery. kube-prometheus-stack-aws sets
+# serviceMonitorSelectorNilUsesHelmValues:false, so it is picked up regardless of label;
+# the release label is added for consistency. Alert rules are centralized in
+# kube-prometheus-stack-aws/values/prod-alerts.yaml (external-dns-alerts group).
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack

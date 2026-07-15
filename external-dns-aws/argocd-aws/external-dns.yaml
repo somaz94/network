@@ -1,0 +1,26 @@
+# Per-release ArgoCD metadata for external-dns-aws (helmfile release: external-dns).
+# Consumed by the AWS infra-applicationset git-files generator (argocd-applicationset repo,
+# appsets/aws/infra/infra-applicationset.yaml) -> Application infra-external-dns on the prod ArgoCD.
+#
+# Marker dir is `argocd-aws/` (NOT `argocd/`): the on-prem infra-applicationset globs `**/argocd/*.yaml`
+# over this SAME repo, so AWS metadata lives under a disjoint marker dir to avoid a cross-cluster
+# `infra-<releaseName>` app-name collision. See the AWS appset header for the full rationale.
+#
+# external-dns syncs the example.com Route53 zone (AWS auth via EKS Pod Identity, no IRSA). It is a
+# stateless Deployment (no PVC) with no ConfigMap, isolated from the data plane -> low blast radius.
+# The helmfile `helm dependency update .` presync is a helmfile-only step; ArgoCD resolves the remote
+# chart's deps from the registry directly, so it has no ArgoCD analogue (nothing to port).
+# autoSync:false = enroll MANUAL; verify the adopt-diff (zero recreate/restart) then flip to true.
+#
+# This file is the chart-version SSOT for the migrated component (upgrade.py bumps chart.version here).
+component: external-dns-aws                     # -> app-name label on the generated App
+releaseName: external-dns                       # -> App name (infra-external-dns) AND helm release name (clean adoption)
+namespace: external-dns                         # already helmfile-managed; do not contest ownership
+syncWave: "1"                                   # core networking tier (reachability; mirrors helmfile deploy wave 1)
+chart:
+  repoURL: https://kubernetes-sigs.github.io/external-dns/
+  name: external-dns
+  version: "1.21.1"
+valueFile: network/external-dns-aws/values/prod.yaml  # repo-root-relative; pulled via the kuberntes-infra $values multi-source ref
+createNamespace: false                          # 'external-dns' already exists
+autoSync: true                                  # adopt-diff verified clean (tracking-id annotations only; Deployment gen bumped, RS revision unchanged, pod 0-restart) -> auto-sync (prune+selfHeal) on
