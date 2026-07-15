@@ -62,9 +62,9 @@ Each release's chart version comes from a local `Chart.yaml`, read via `readFile
 - Kubernetes 1.25+
 - Helm 3.8+ (OCI registry support)
 - Helmfile
-- MetalLB (pool: `192.168.1.55-58, 62-79`)
+- MetalLB (pool: `192.0.2.55-58, 62-79`)
 
-> **Note:** `192.168.1.80` is reserved/unusable. NGF Phase 1 temporary IPs are constrained to `.69-.79` (all 11 Gateways covered).
+> **Note:** `192.0.2.80` is reserved/unusable. NGF Phase 1 temporary IPs are constrained to `.69-.79` (all 11 Gateways covered).
 
 <br/>
 
@@ -117,17 +117,17 @@ All 11 Gateways use **temporary IPs** during Phase 1 so they are fully isolated 
 
 | GatewayClass | Phase 1 temp IP | Phase 6 real IP |
 |---|---|---|
-| ngf | 192.168.1.69 | 192.168.1.55 |
-| ngf-public-a | 192.168.1.70 | 192.168.1.56 |
-| ngf-public-b | 192.168.1.71 | 192.168.1.57 |
-| ngf-public-c | 192.168.1.72 | 192.168.1.58 |
-| ngf-public-d | 192.168.1.73 | 192.168.1.62 |
-| ngf-public-e | 192.168.1.74 | 192.168.1.63 |
-| ngf-public-f | 192.168.1.75 | 192.168.1.64 |
-| ngf-public-g | 192.168.1.76 | 192.168.1.65 |
-| ngf-public-h | 192.168.1.77 | 192.168.1.66 |
-| ngf-public-i | 192.168.1.78 | 192.168.1.67 |
-| ngf-public-j | 192.168.1.79 | 192.168.1.68 |
+| ngf | 192.0.2.69 | 192.0.2.55 |
+| ngf-public-a | 192.0.2.70 | 192.0.2.56 |
+| ngf-public-b | 192.0.2.71 | 192.0.2.57 |
+| ngf-public-c | 192.0.2.72 | 192.0.2.58 |
+| ngf-public-d | 192.0.2.73 | 192.0.2.62 |
+| ngf-public-e | 192.0.2.74 | 192.0.2.63 |
+| ngf-public-f | 192.0.2.75 | 192.0.2.64 |
+| ngf-public-g | 192.0.2.76 | 192.0.2.65 |
+| ngf-public-h | 192.0.2.77 | 192.0.2.66 |
+| ngf-public-i | 192.0.2.78 | 192.0.2.67 |
+| ngf-public-j | 192.0.2.79 | 192.0.2.68 |
 
 No LB IP conflict with ingress-nginx → both can coexist throughout Phase 1-5.
 

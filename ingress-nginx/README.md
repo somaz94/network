@@ -15,17 +15,17 @@ All 11 Helm releases (main `ingress-nginx` + `ingress-nginx-public-{a..j}`) and 
 
 | # | Release | Real IP | Target app | Cutover · Destroy date |
 |---|---|---|---|---|
-| 1 | `ingress-nginx-public-a` | 192.168.1.56 | dev-example-project-game | 2026-04-17 |
-| 2 | `ingress-nginx-public-b` | 192.168.1.57 | static-file-server | 2026-04-17 |
-| 3 | `ingress-nginx-public-c` | 192.168.1.58 | staging-example-project-game | 2026-04-17 |
-| 4 | `ingress-nginx-public-d` | 192.168.1.62 | staging-example-project-admin | 2026-04-17 |
-| 5 | `ingress-nginx-public-e` | 192.168.1.63 | dev-example-project-app-admin | 2026-04-17 |
-| 6 | `ingress-nginx-public-f` | 192.168.1.64 | dev-example-project-admin | 2026-04-17 |
-| 7 | `ingress-nginx-public-g` | 192.168.1.65 | qa-example-project-game | 2026-04-17 |
-| 8 | `ingress-nginx-public-h` | 192.168.1.66 | qa-example-project-admin | 2026-04-17 |
-| 9 | `ingress-nginx-public-i` | 192.168.1.67 | qa-example-project-app-admin | 2026-04-17 |
-| 10 | `ingress-nginx-public-j` | 192.168.1.68 | git-bridge | 2026-04-17 |
-| 11 | `ingress-nginx` (main) | 192.168.1.55 | harbor/argocd/vaultwarden/observability stack/etc. (13 apps) | 2026-04-17 |
+| 1 | `ingress-nginx-public-a` | 192.0.2.56 | dev-example-project-game | 2026-04-17 |
+| 2 | `ingress-nginx-public-b` | 192.0.2.57 | static-file-server | 2026-04-17 |
+| 3 | `ingress-nginx-public-c` | 192.0.2.58 | staging-example-project-game | 2026-04-17 |
+| 4 | `ingress-nginx-public-d` | 192.0.2.62 | staging-example-project-admin | 2026-04-17 |
+| 5 | `ingress-nginx-public-e` | 192.0.2.63 | dev-example-project-app-admin | 2026-04-17 |
+| 6 | `ingress-nginx-public-f` | 192.0.2.64 | dev-example-project-admin | 2026-04-17 |
+| 7 | `ingress-nginx-public-g` | 192.0.2.65 | qa-example-project-game | 2026-04-17 |
+| 8 | `ingress-nginx-public-h` | 192.0.2.66 | qa-example-project-admin | 2026-04-17 |
+| 9 | `ingress-nginx-public-i` | 192.0.2.67 | qa-example-project-app-admin | 2026-04-17 |
+| 10 | `ingress-nginx-public-j` | 192.0.2.68 | git-bridge | 2026-04-17 |
+| 11 | `ingress-nginx` (main) | 192.0.2.55 | harbor/argocd/vaultwarden/observability stack/etc. (13 apps) | 2026-04-17 |
 
 ### Rollback (helm re-install)
 

@@ -75,8 +75,8 @@ Configure IP pools and L2 mode in `values/dev-metallb-cr.yaml` (rendered by the 
 ipAddressPools:
   - name: ip-pool
     addresses:
-      - 192.168.1.55-192.168.1.58
-      - 192.168.1.62-192.168.1.75
+      - 192.0.2.55-192.0.2.58
+      - 192.0.2.62-192.0.2.75
     autoAssign: true
 
 l2Advertisements:

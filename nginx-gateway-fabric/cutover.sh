@@ -80,8 +80,8 @@ case "$CLASS" in
   *) echo "Unknown class: $CLASS"; usage ;;
 esac
 
-REAL_IP="192.168.1.${REAL}"
-TEMP_IP="192.168.1.${TEMP}"
+REAL_IP="192.0.2.${REAL}"
+TEMP_IP="192.0.2.${TEMP}"
 ING_DEP="${ING_REL}-controller"
 ING_SVC="${ING_REL}-controller"
 PROXY="${GW}-proxy"

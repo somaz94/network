@@ -8,12 +8,12 @@ ipAddressPools:
   - name: ip-pool
     addresses:
       # IP address pool to use (shrunk .76-.79 after NGF migration completed, 2026-04-17)
-      # 192.168.1.60 is avoided for bare-metal GitLab (gitlab.example.com)
-      # 192.168.1.59 and .61 are reserved (usage unknown, expand later if needed)
-      # 192.168.1.80 is a prohibited IP
+      # 192.0.2.60 is avoided for bare-metal GitLab (gitlab.example.com)
+      # 192.0.2.59 and .61 are reserved (usage unknown, expand later if needed)
+      # 192.0.2.80 is a prohibited IP
       # Allocation status: .55 (ngf main), .56-.58, .62-.68 (ngf-public-a..j), .69-.75 reserved
-      - 192.168.1.55-192.168.1.58
-      - 192.168.1.62-192.168.1.75
+      - 192.0.2.55-192.0.2.58
+      - 192.0.2.62-192.0.2.75
     autoAssign: true
 
 l2Advertisements:
