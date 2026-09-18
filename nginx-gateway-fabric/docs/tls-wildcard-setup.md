@@ -300,4 +300,3 @@ Two per-app manual rotation points → consolidated into one central wildcard.
 
 - [`../values/dev-cr.yaml`](../values/dev-cr.yaml) — Gateway definitions (`gateways[]`, rendered by the `nginx-gateway-cr` release)
 - `README.md` — NGF overall operations guide
-- `docs/tls-wildcard-setup.md` — Korean version of this document
