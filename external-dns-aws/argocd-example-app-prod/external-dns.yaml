@@ -1,0 +1,40 @@
+# Per-release ArgoCD metadata for external-dns-aws on the EXAMPLE-APP-PROD cluster (EKS Auto
+# Mode, account 123456789012). Consumed by that cluster's infra-applicationset git-files
+# generator (argocd-applicationset repo, appsets/example-app-prod/infra/infra-applicationset.yaml)
+# -> Application example-app-prod-infra-external-dns on the example-app-prod ArgoCD.
+#
+# 🔴 The SECOND metadata file for this component. argocd-aws/external-dns.yaml is the same
+# release on prod-example-app-v1, and both are live for the whole workload migration. They are
+# separate files rather than one shared file because each cluster needs its own valueFile:
+# values/prod.yaml there, values/example-app-prod.yaml here. The two values files run the same
+# external-dns against the SAME Route53 zone and stay out of each other's way via
+# policy: upsert-only + a distinct txtOwnerId + a distinct annotation-filter -- read the header
+# of values/example-app-prod.yaml before touching any of those three.
+#
+# 🔴 Marker dir is `argocd-example-app-prod/`, disjoint from all four existing markers
+# (`argocd/`, `argocd-local/`, `argocd-aws/`, `argocd-local-aws/`): the generators all glob this
+# SAME repo and the generated app name `infra-<releaseName>` is shared across clusters. Full
+# rationale in the appset header.
+#
+# ⚠️ The chart pin below is duplicated from argocd-aws/external-dns.yaml on purpose (both
+# clusters run the same version today). upgrade.py bumps BOTH -- its CONFIG.ARGOCD_PIN_FILES
+# lists the two paths -- so do not treat the duplication as drift, and do not hand-edit one.
+#
+# Adoption: this release was owned by the BOOTSTRAP helmfile (helmfile.yaml.gotmpl
+# -e example-app-prod), which existed only to publish the DNS record for ArgoCD's own ingress
+# before ArgoCD was running. It was enrolled MANUAL (autoSync:false), verified, then flipped --
+# see the autoSync line below for the evidence. releaseName=external-dns keeps the same helm
+# release, so ArgoCD adopted it in place.
+#
+# This file is the chart-version SSOT for this cluster's copy of the component.
+component: external-dns-aws                     # -> app-name label on the generated App
+releaseName: external-dns                       # helm release name (clean adoption). App name is <cluster>-infra-<releaseName> on this track -- the appset prefixes it; releaseName itself is NEVER prefixed
+namespace: external-dns                         # already created by the bootstrap helmfile; do not contest ownership
+syncWave: "1"                                   # core networking tier (reachability; mirrors helmfile deploy wave 1)
+chart:
+  repoURL: https://kubernetes-sigs.github.io/external-dns/
+  name: external-dns
+  version: "1.21.1"
+valueFile: network/external-dns-aws/values/example-app-prod.yaml  # repo-root-relative; pulled via the kuberntes-infra $values multi-source ref
+createNamespace: false                          # 'external-dns' already exists
+autoSync: true                                  # adopt-diff verified 2026-08-31: the chart rendered from this file's pin + valueFile is IDENTICAL to the live helmfile release manifest, so the sync applied tracking-id annotations only -- same pod name/UID, 0 restarts, one ReplicaSet still at rollout revision 1 (Deployment metadata.generation 1->2 without a rollout). Auto-sync (prune+selfHeal) on.

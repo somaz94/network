@@ -1,4 +1,4 @@
-# Tenant-level NGF custom resources (Gateway / NginxProxy / ServiceMonitor) for the dev cluster.
+# Tenant-level NGF custom resources (Gateway / NginxProxy / ClientSettingsPolicy / PodMonitor) for the dev cluster.
 #
 # Section order mirrors `cr-chart/values.yaml` for cross-reference.
 # Only sections we override are present here; others fall back to chart defaults.
@@ -29,6 +29,11 @@ proxy:
 # Gateways
 # ---------------------------------------------------------------------------
 # 11 Gateways + 11 matching NginxProxies (`<name>-proxy` auto-named by the chart).
+#
+# TLS Secret source: wildcard-example-tls (and server-tls) are sealed at the
+# argocd-applicationset repo under secret/nginx-gateway-tls/ and delivered by
+# infra-sealedsecret-applicationset — no manual `kubectl create secret tls` step.
+# See security/sealed-secrets/README (placement rule) and docs/tls-wildcard-setup.md.
 gateways:
   # Main: HTTPS enabled (wildcard-example-tls). 13 core production apps.
   - name: ngf
@@ -59,6 +64,58 @@ gateways:
     loadBalancerIP: 192.0.2.67
   - name: ngf-public-j
     loadBalancerIP: 192.0.2.68
+
+# ---------------------------------------------------------------------------
+# ClientSettingsPolicies
+# ---------------------------------------------------------------------------
+# Hold idle downstream keep-alive connections open across an nginx reload.
+#
+# Backend endpoints are rendered statically into the nginx config (`server
+# <pod-ip>:<port>;`), so an app rollout shifts them, NGF regenerates the config
+# and reloads. The old workers then shut down gracefully, and graceful shutdown
+# closes idle keep-alive connections with no notice. HTTP/1.1 has no GOAWAY
+# equivalent, so a client that reuses such a connection at that moment gets a
+# connection reset instead of a response -- intermittent "connection closed"
+# right after a deploy.
+#
+# keepalive_min_timeout makes nginx keep an idle connection for at least this
+# long, reload included. 21s matches the client-side keep-alive idle timeout
+# (Unity BestHTTP defaults to 20-21s), so the client always either reuses the
+# connection well inside the window or closes it first -- the race disappears.
+#
+# Attaches at Gateway scope, so every route on the target Gateway inherits it.
+# The routes themselves are owned by the argocd-applicationset repo, not this
+# one -- anything later attached to these Gateways inherits the setting too.
+# Keep this at or below the server keep-alive timeout (nginx `keepalive_timeout`,
+# 75s by default and not overridden here).
+#
+# Requires NGF >= 2.6.0 (nginx >= 1.27.4) for keepAlive.minTimeout, and
+# nginx-gateway-cr >= 0.4.0 for clientSettingsPolicies rendering.
+# Upstream request: https://github.com/nginx/nginx-gateway-fabric/issues/4802
+clientSettingsPolicies:
+  # ngf-public-a -> dev-game
+  - name: ngf-public-a-keepalive
+    targetRef:
+      kind: Gateway
+      name: ngf-public-a
+    keepAlive:
+      minTimeout: "21s"
+  # ngf-public-g -> qa-game
+  - name: ngf-public-g-keepalive
+    targetRef:
+      kind: Gateway
+      name: ngf-public-g
+    keepAlive:
+      minTimeout: "21s"
+  # ngf-public-c -> dev2-game (added 2026-09-15 with the dev2 environment). Same Unity client, so
+  # it needs the same protection as dev-game/qa-game; without it dev2 reproduces the post-deploy
+  # connection-reset race described above.
+  - name: ngf-public-c-keepalive
+    targetRef:
+      kind: Gateway
+      name: ngf-public-c
+    keepAlive:
+      minTimeout: "21s"
 
 # ---------------------------------------------------------------------------
 # ServiceMonitors (Prometheus Operator / kube-prometheus-stack)

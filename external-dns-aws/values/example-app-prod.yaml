@@ -1,0 +1,112 @@
+# Applied values for the example-app-prod (EKS Auto Mode, eu-central-1, account
+# 123456789012) cluster.
+#
+# 🔴 A SECOND external-dns against the SAME Route53 zone. prod-example-app-v1 runs one too
+# (values/prod.yaml) and both will be live for the whole workload migration, so three fields
+# below are what keep them from fighting. Read this before changing any of them.
+#
+#   1. policy: upsert-only   -- neither instance ever DELETES a record. Carried over
+#                               unchanged; it is the reason coexistence is safe at all.
+#   2. txtOwnerId            -- DIFFERENT from the other instance. external-dns writes
+#                               ownership into a TXT record and leaves records owned by a
+#                               different id alone, so neither takes over the other's names.
+#   3. annotation-filter     -- a DIFFERENT annotation key, and the important one. See below.
+#
+# txtPrefix is deliberately the SAME as the other instance. Both must read the same registry
+# to see each other's ownership; a different prefix would hide the other's TXT records and
+# let this instance create a duplicate A record for a name that is already taken.
+image:
+  repository: registry.k8s.io/external-dns/external-dns
+  pullPolicy: IfNotPresent
+
+serviceAccount:
+  create: true
+  # EKS Pod Identity, not IRSA -- the association already exists
+  # (terraform-infra-aws project/example-app/prod/pod-identity, namespace external-dns /
+  # SA external-dns). The pod-identity agent injects credentials at admission, so the SA
+  # needs no eks.amazonaws.com/role-arn annotation.
+
+# The platform pool (see compute/karpenter-automode). Unlike the source cluster's system
+# node group this one is TAINTED, because a Karpenter pool scales and a managed node group
+# did not -- so a toleration is required here where the old values file needed none.
+nodeSelector:
+  nodegroup-workload: platform
+tolerations:
+  - key: dedicated
+    operator: Equal
+    value: platform
+    effect: NoSchedule
+
+podSecurityContext:
+  runAsNonRoot: true
+  fsGroup: 65534
+
+securityContext:
+  privileged: false
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  runAsNonRoot: true
+  runAsUser: 65532
+  runAsGroup: 65532
+  capabilities:
+    drop: ["ALL"]
+
+rbac:
+  create: true
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    cpu: 200m
+    memory: 256Mi
+
+logLevel: info
+logFormat: text
+
+interval: 5m
+
+sources:
+  - service
+  - ingress
+
+# Never delete. Load-bearing while two instances share the zone -- see the header.
+policy: upsert-only
+
+registry: txt
+# 🔴 Must differ from the other cluster's "example-app-external-dns".
+txtOwnerId: "example-app-prod-external-dns"
+# Same prefix as the other instance on purpose -- see the header.
+txtPrefix: "external-dns-"
+
+domainFilters:
+  - example.com
+
+provider:
+  name: aws
+
+extraArgs:
+  - --aws-zone-type=public
+  - --aws-prefer-cname
+  # 🔴 A DIFFERENT annotation key from the source cluster's
+  # `external-dns.example-app.kubernetes.io/hostname`, and this is what makes the cutover an
+  # explicit act rather than an accident.
+  #
+  # Migrating a workload means copying its values file to this cluster, and those files
+  # carry the OLD gate annotation. If this instance filtered on the same key, the moment a
+  # workload's Ingress appeared here external-dns would repoint game.example.com at this
+  # cluster's ALB -- cutting traffic over before anyone decided to. With a different key the
+  # copied Ingress is simply ignored, and cutting over becomes a one-line, reviewable change
+  # to that workload's values.
+  #
+  # ⚠️ Consequence: a hostname is NOT published here until its Ingress carries
+  # external-dns.example-app.kubernetes.io/hostname. If a record does not appear, check that
+  # annotation first -- there is no error anywhere, the Ingress is just not selected.
+  - --annotation-filter=external-dns.example-app.kubernetes.io/hostname
+
+# kube-prometheus-stack landed on this cluster 2026-09-01, so this is on. It was off while the monitoring CRDs did not exist. The `release` label is for consistency only -- kube-prometheus-stack-aws sets serviceMonitorSelectorNilUsesHelmValues: false, so the ServiceMonitor is picked up regardless of label.
+serviceMonitor:
+  enabled: true
+  additionalLabels:
+    release: kube-prometheus-stack

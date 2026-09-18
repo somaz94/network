@@ -1,0 +1,59 @@
+# external-dns — Route53 record sync.
+#
+# 🔴 BOOTSTRAP ONLY. On prod-example-app-v1 this component is delivered by ArgoCD
+# (argocd-aws/external-dns.yaml, values/prod.yaml) and this helmfile is not used for it.
+# It exists for the other case: bringing up a NEW cluster, where ArgoCD does not exist yet
+# and something has to publish the DNS record for ArgoCD's own ingress. Once that cluster's
+# ArgoCD is running, this release is adopted onto the pull track like every other component
+# and this file goes back to being unused.
+#
+# 🔴 DO NOT APPLY the example-app-prod environment. That bootstrap already happened and the
+# release was adopted by ArgoCD on 2026-08-31 (Application example-app-prod-infra-external-dns,
+# autoSync prune+selfHeal; the adopt-diff evidence is in argocd-example-app-prod/external-dns.yaml).
+# The Deployment is ArgoCD-owned, so this file is unused for that cluster too — the environment
+# block below is kept only as the recipe for the NEXT new cluster.
+#
+# ⚠️ `helm list -A` on example-app-prod still reports external-dns at revision 1. That is the
+# leftover bootstrap release record, NOT evidence that the component is helmfile-owned. This is
+# the only component that carries BOTH a helmfile environment and an argocd-*/ marker, so the
+# usual "no marker = helmfile track" shortcut misreads it. Check for a marker directory, not
+# `helm list`. It matters during the cutover: the DNS ownership step (D-Day plan Step 7-3) is
+# the one step that touches external-dns, and diagnosing it from `helm list` leads here by
+# mistake. Chart.yaml, both markers and the live release all carry the same pinned version, so an
+# accidental apply would be close to idempotent — but it would still contest ownership with
+# ArgoCD's selfHeal.
+#
+# Always pass BOTH --kube-context and the cluster's values file. This component now has one
+# values file per cluster and picking the wrong pair points a second external-dns at the
+# same Route53 zone with the wrong ownership id — see the header of values/example-app-prod.yaml.
+#
+#   helmfile --kube-context <new-cluster> -e <new-cluster> diff
+#   helmfile --kube-context <new-cluster> -e <new-cluster> apply
+#
+# Version single source of truth: Chart.yaml.
+
+environments:
+  example-app-prod:
+    values:
+      - valuesFile: values/example-app-prod.yaml
+
+---
+
+{{- $chart := readFile "Chart.yaml" | fromYaml }}
+{{- $chartVersion := $chart.version }}
+
+repositories:
+  - name: external-dns
+    url: https://kubernetes-sigs.github.io/external-dns/
+
+helmDefaults:
+  historyMax: 3
+
+releases:
+  - name: external-dns
+    namespace: external-dns
+    createNamespace: true
+    chart: external-dns/external-dns
+    version: {{ $chartVersion | quote }}
+    values:
+      - {{ .Values.valuesFile }}

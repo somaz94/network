@@ -74,16 +74,16 @@ Configure IP pools and L2 mode in `values/dev-metallb-cr.yaml` (rendered by the 
 ```yaml
 ipAddressPools:
   - name: ip-pool
-    addresses:
-      - 192.0.2.55-192.0.2.58
-      - 192.0.2.62-192.0.2.75
+    addresses: [...]        # real ranges: ipAddressPools[].addresses in values/dev-metallb-cr.yaml
     autoAssign: true
 
 l2Advertisements:
-  - name: l2-network
+  - name: l2-network        # real definition: l2Advertisements[] in values/dev-metallb-cr.yaml
     ipAddressPools:
       - ip-pool
 ```
+
+> 🔴 **Do not copy the address ranges into this document.** The allocatable IPs are owned solely by `ipAddressPools[].addresses` in [`values/dev-metallb-cr.yaml`](values/dev-metallb-cr.yaml) (that file's comments explain the reserved / excluded IPs). A copy in another README once outlived a pool shrink and went stale.
 
 The CRs are applied automatically by `helmfile apply`. To inspect:
 

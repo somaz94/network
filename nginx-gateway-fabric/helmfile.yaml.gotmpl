@@ -70,6 +70,25 @@ releases:
               echo "=== prepare hook: skipped (HELMFILE_SKIP_CLUSTER_HOOKS=1) ==="
               exit 0
             fi
+            # helmfile passes --kube-context to helm but NOT to a raw kubectl in a
+            # hook: v1.1.0 exposes the resolved context neither as a template value
+            # nor in the hook environment, so this apply would land on whatever
+            # `kubectl config current-context` happens to be. This repo drives two
+            # clusters, so require the caller to name the target -- never guess.
+            # Mirrors the gate in scripts/lib/kube-context.sh.
+            if [ -z "${KUBE_CONTEXT:-}" ]; then
+            # NOTE: these go to stdout, not stderr -- helmfile's `showlogs` only
+            # relays a hook's stdout, so a message on stderr is swallowed and the
+            # operator sees only "command bash exited with non-zero status".
+              echo "ERROR: KUBE_CONTEXT is not set -- refusing to apply CRDs."
+              echo "  This hook never falls back to the current kube-context: an"
+              echo "  implicit one targets the wrong cluster silently, and with"
+              echo "  exit code 0."
+              echo "  Run: KUBE_CONTEXT=<ctx> helmfile --kube-context <ctx> apply"
+              echo "  Contexts here: kubectl config get-contexts -o name"
+              exit 2
+            fi
+            echo "=== target kube-context: ${KUBE_CONTEXT} ==="
             echo "=== prepare hook: installing CRDs ==="
 
             GW_API_VER=$(curl -fsSL \
@@ -82,7 +101,7 @@ releases:
             echo "Gateway API version pinned by NGF v{{ $appVersion }}: $GW_API_VER"
 
             # Gateway API standard channel CRDs
-            kubectl apply --server-side --force-conflicts \
+            kubectl --context "${KUBE_CONTEXT}" apply --server-side --force-conflicts \
               -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GW_API_VER}/standard-install.yaml"
 
             # NGF's own CRDs (chart crds/).
@@ -90,7 +109,7 @@ releases:
             trap 'rm -rf "$tmp"' EXIT
             helm pull oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
               --version {{ $chartVersion }} --untar --untardir "$tmp"
-            kubectl apply --server-side --force-conflicts -f "$tmp/nginx-gateway-fabric/crds/"
+            kubectl --context "${KUBE_CONTEXT}" apply --server-side --force-conflicts -f "$tmp/nginx-gateway-fabric/crds/"
 
             echo "=== CRDs ready ==="
 
@@ -103,25 +122,45 @@ releases:
           - |
             set +e
             echo "=== postuninstall hook: removing CRDs + namespace ==="
+            # Same kube-context gap as the prepare hook above -- helmfile does not
+            # pass --kube-context into a hook. It matters far more here: the standard
+            # Gateway API CRDs deleted below are SHARED with the AWS cluster, whose
+            # aws-load-balancer-controller installs the same standard-install.yaml.
+            # Deleting a CRD cascades to every CR of that kind, so a wrong context
+            # takes out the other cluster's Gateways and HTTPRoutes -- and `set +e`
+            # above means nothing would stop or report it.
+            if [ -z "${KUBE_CONTEXT:-}" ]; then
+            # NOTE: these go to stdout, not stderr -- helmfile's `showlogs` only
+            # relays a hook's stdout, so a message on stderr is swallowed and the
+            # operator sees only "command bash exited with non-zero status".
+              echo "ERROR: KUBE_CONTEXT is not set -- refusing to delete CRDs."
+              echo "  This hook never falls back to the current kube-context: the"
+              echo "  standard Gateway API CRDs are shared with the other cluster,"
+              echo "  and deleting a CRD cascades to every CR of that kind."
+              echo "  Run: KUBE_CONTEXT=<ctx> helmfile --kube-context <ctx> destroy"
+              echo "  Contexts here: kubectl config get-contexts -o name"
+              exit 2
+            fi
+            echo "=== target kube-context: ${KUBE_CONTEXT} ==="
 
             # NGF's own CRDs.
             tmp=$(mktemp -d)
             trap 'rm -rf "$tmp"' EXIT
             helm pull oci://ghcr.io/nginx/charts/nginx-gateway-fabric \
               --version {{ $chartVersion }} --untar --untardir "$tmp"
-            kubectl delete --ignore-not-found=true -f "$tmp/nginx-gateway-fabric/crds/"
+            kubectl --context "${KUBE_CONTEXT}" delete --ignore-not-found=true -f "$tmp/nginx-gateway-fabric/crds/"
 
             # Gateway API CRDs (auto-detected)
             GW_API_VER=$(curl -fsSL \
               "https://raw.githubusercontent.com/nginx/nginx-gateway-fabric/v{{ $appVersion }}/config/crd/gateway-api/standard/kustomization.yaml" \
               | grep -oE 'ref=v[0-9]+\.[0-9]+\.[0-9]+' | head -1 | sed 's/ref=v//')
             if [ -n "$GW_API_VER" ]; then
-              kubectl delete --ignore-not-found=true \
+              kubectl --context "${KUBE_CONTEXT}" delete --ignore-not-found=true \
                 -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/v${GW_API_VER}/standard-install.yaml"
             fi
 
             # Namespace
-            kubectl delete namespace nginx-gateway --ignore-not-found=true
+            kubectl --context "${KUBE_CONTEXT}" delete namespace nginx-gateway --ignore-not-found=true
 
             echo "=== postuninstall done ==="
 

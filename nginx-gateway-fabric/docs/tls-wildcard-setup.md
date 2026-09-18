@@ -19,6 +19,7 @@ Management guide for the single wildcard certificate used to terminate HTTPS tra
 - **Start with minimal SANs**: currently only `example.com` + `*.example.com` (covers Phase 4 Harbor/Vault and other core apps). Subdomains like `*.pm.example.com` are added on-demand — see "Subdomain Expansion" below
 - **Gateway-layer ownership**: app charts know nothing about TLS — only the Gateway references the Secret
 - **Forward-compatible migration**: Secret name/namespace are fixed so future cert-manager adoption swaps only the Secret content — Gateway and apps stay unchanged
+- **SealedSecret delivery**: cert generation stays manual (self-signed), but the resulting `wildcard-example-tls` / `server-tls` Secrets are sealed and committed to the `argocd-applicationset` repo under `secret/nginx-gateway-tls/` as `SealedSecret`s, delivered automatically by `infra-sealedsecret-applicationset`. The `kubectl create secret tls` steps below produce the plaintext Secret at **initial creation / cert rotation** time; that Secret is then sealed with `kubeseal` and committed. See `security/sealed-secrets/README` for the placement rule.
 
 <br/>
 
@@ -105,21 +106,19 @@ rm wildcard.key                   # private key must be deleted
 
 ## Gateway Integration
 
-The `ngf` Gateway in `manifests/gateways.yaml` has one HTTPS listener referencing this Secret (current state):
+The Gateways are rendered by the `nginx-gateway-cr` release (chart pinned in `cr-chart/`, values in [`../values/dev-cr.yaml`](../values/dev-cr.yaml)). The `ngf` Gateway declares one HTTPS listener referencing this Secret through the `https:` shorthand block (current state):
 
 ```yaml
-listeners:
-  - name: https                     # covers *.example.com
-    protocol: HTTPS
-    port: 443
-    hostname: "*.example.com"
-    tls:
-      mode: Terminate
-      certificateRefs:
-        - kind: Secret
-          name: wildcard-example-tls
-    allowedRoutes: { namespaces: { from: All } }
+gateways:
+  - name: ngf
+    loadBalancerIP: 192.0.2.55
+    https:
+      enabled: true
+      hostname: "*.example.com"
+      tlsSecretName: wildcard-example-tls
 ```
+
+> The shorthand only produces **one HTTP + one HTTPS listener** (`http:` / `https:`, default ports 80 / 443, `allowedRoutes.namespaces.from: All`). Anything beyond that requires dropping down to the `listeners:` array, as in the expansion procedure below.
 
 Apps attach via `parentRefs[*].sectionName: https` in their HTTPRoute:
 
@@ -172,29 +171,48 @@ The NGF data plane detects the Secret change and reloads nginx config automatica
 
 ### Step 3 — Add a listener to the Gateway
 
-Append a listener to the `ngf` Gateway in `manifests/gateways.yaml`:
+Convert the `ngf` entry in `values/dev-cr.yaml` from the `https:` shorthand to an explicit `listeners:` array. Once `listeners` is set the `http:` / `https:` shorthand is **ignored**, so the existing HTTP and HTTPS listeners must be re-declared in the same array:
 
 ```yaml
-listeners:
-  # existing listeners retained
-  - name: http        { ... }
-  - name: https       { ... }
-  # new listener
-  - name: https-pm
-    protocol: HTTPS
-    port: 443
-    hostname: "*.pm.example.com"
-    tls:
-      mode: Terminate
-      certificateRefs:
-        - kind: Secret
-          name: wildcard-example-tls      # same Secret, different SAN used
-    allowedRoutes:
-      namespaces:
-        from: All
+gateways:
+  - name: ngf
+    loadBalancerIP: 192.0.2.55
+    # drop the https: shorthand — it is ignored once listeners is set
+    listeners:
+      # re-declare the two listeners the shorthand used to render
+      - name: http
+        protocol: HTTP
+        port: 80
+        allowedRoutes: { namespaces: { from: All } }
+      - name: https
+        protocol: HTTPS
+        port: 443
+        hostname: "*.example.com"
+        tls:
+          mode: Terminate
+          certificateRefs:
+            - kind: Secret
+              name: wildcard-example-tls
+        allowedRoutes: { namespaces: { from: All } }
+      # new listener
+      - name: https-pm
+        protocol: HTTPS
+        port: 443
+        hostname: "*.pm.example.com"
+        tls:
+          mode: Terminate
+          certificateRefs:
+            - kind: Secret
+              name: wildcard-example-tls      # same Secret, different SAN used
+        allowedRoutes: { namespaces: { from: All } }
 ```
 
-Commit + `helmfile apply` → NGF postsync hook updates the Gateway.
+Commit, then apply the cr release only:
+
+```bash
+helmfile --selector name=nginx-gateway-cr diff
+helmfile --selector name=nginx-gateway-cr apply
+```
 
 ### Step 4 — Update app values
 
@@ -213,7 +231,7 @@ httproute:
 For any additional subdomain zone, repeat the same pattern:
 1. Add `DNS:*.{zone}` to the cert SAN list → reissue with `openssl`
 2. Replace the Secret
-3. Add a `name: https-{zone}` listener in the Gateway (same Secret, only hostname differs)
+3. Add a `name: https-{zone}` listener to the `listeners:` array in `values/dev-cr.yaml` (same Secret, only hostname differs)
 4. Reference `sectionName: https-{zone}` in the app HTTPRoute
 
 **Benefit**: Single Secret stays the source of truth (single rotation point). Only the Gateway listener count grows with the number of zones.
@@ -280,6 +298,6 @@ Two per-app manual rotation points → consolidated into one central wildcard.
 
 ## References
 
-- `manifests/gateways.yaml` — Gateway resource definition
+- [`../values/dev-cr.yaml`](../values/dev-cr.yaml) — Gateway definitions (`gateways[]`, rendered by the `nginx-gateway-cr` release)
 - `README.md` — NGF overall operations guide
 - `docs/tls-wildcard-setup.md` — Korean version of this document

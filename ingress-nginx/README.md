@@ -29,9 +29,9 @@ All 11 Helm releases (main `ingress-nginx` + `ingress-nginx-public-{a..j}`) and 
 
 ### Rollback (helm re-install)
 
-This directory is an archive, so rolling back means moving the directory back to `network/ingress-nginx/` and running `helmfile apply`. Flip the NGF-side `manifests/nginxproxies.yaml` `loadBalancerIP` entries back to the temporary range (`.69-.75`) and `kubectl apply` as well.
+This directory is an archive, so rolling back means moving the directory back to `network/ingress-nginx/` and running `helmfile apply`. Flip the NGF-side `gateways[].loadBalancerIP` entries in `../../nginx-gateway-fabric/values/dev-cr.yaml` back to temporary IPs and run `helmfile --selector name=nginx-gateway-cr apply` as well.
 
-Note: the MetalLB pool may have been narrowed (currently `.55-.75`, 21 addresses). Expand it via `../metallb/values/dev-metallb-cr.yaml` + `helmfile apply` if needed.
+Note: the MetalLB pool was narrowed after the cutover — the temporary range (`.76`–`.79`) was removed. The allocatable addresses are owned by `ipAddressPools[].addresses` in `../../metallb/values/dev-metallb-cr.yaml`; if a rollback needs temporary IPs, widen the range there first and then `helmfile apply`.
 
 ### Cutover lessons captured at the time (automated by `../../nginx-gateway-fabric/cutover.sh`)
 

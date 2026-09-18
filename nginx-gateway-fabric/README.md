@@ -13,14 +13,18 @@ nginx-gateway-fabric/
 ├── Chart.yaml                   # NGF upstream chart version (version + appVersion = single source)
 ├── helmfile.yaml.gotmpl         # Two releases (controller + cr) — auto-reads each Chart.yaml
 ├── values.yaml                  # Upstream NGF defaults (managed by upgrade.py, placeholder)
+├── values.schema.json           # Upstream NGF values schema (reference)
 ├── values/
 │   ├── dev.yaml                # NGF controller custom settings (replicas, metrics, etc.)
-│   └── dev-cr.yaml             # cr release env values (11 Gateway + NginxProxy + ServiceMonitor)
+│   └── dev-cr.yaml             # cr release env values (11 Gateway + NginxProxy + ClientSettingsPolicy + PodMonitor)
 ├── cr-chart/                    # Mirror of external chart metadata (somaz94/nginx-gateway-cr)
 │   ├── Chart.yaml               # Version pin (helmfile readFile reference)
 │   ├── values.yaml              # External chart defaults reference (actual values: values/dev-cr.yaml)
-│   └── values.schema.json       # JSON Schema — local IDE / CI validation
+│   ├── values.schema.json       # JSON Schema — local IDE / CI validation
+│   └── upgrade.py               # cr-chart version-pin upgrade (driven separately from the root upgrade.py)
 ├── upgrade.py                   # NGF controller upgrade (external-oci, GitHub Releases API)
+├── cutover.sh                   # Operational script for the ingress-nginx → NGF cutover
+├── docs/                        # Topic guides (KO + -en.md pairs) — see the Documentation table below
 ├── README.md / README-en.md
 └── backup/
 ```
@@ -62,13 +66,21 @@ Each release's chart version comes from a local `Chart.yaml`, read via `readFile
 - Kubernetes 1.25+
 - Helm 3.8+ (OCI registry support)
 - Helmfile
-- MetalLB (pool: `192.0.2.55-58, 62-79`)
+- MetalLB — the allocatable LoadBalancer IP pool is owned by `ipAddressPools[].addresses` in [`network/metallb/values/dev-metallb-cr.yaml`](../metallb/values/dev-metallb-cr.yaml).
 
-> **Note:** `192.0.2.80` is reserved/unusable. NGF Phase 1 temporary IPs are constrained to `.69-.79` (all 11 Gateways covered).
+> **Note:** `192.0.2.80` is reserved/unusable, and `.76`–`.79` were removed from the pool once the cutover completed (2026-04-17), so they are no longer allocatable.
 
 <br/>
 
 ## Quick Start
+
+> 🔴 **`KUBE_CONTEXT` is required.** This component's hooks call raw `kubectl`, and helmfile passes `--kube-context` to helm only — never into a hook (as of v1.1.0 it is exposed neither as a template value nor in the hook environment). This repo drives two clusters, so an implicit context silently applies to the wrong one. The hooks therefore refuse with exit 2 when `KUBE_CONTEXT` is empty.
+
+```bash
+export KUBE_CONTEXT="<target>"   # list candidates: kubectl config get-contexts -o name
+```
+
+Run the commands below as `helmfile --kube-context "$KUBE_CONTEXT" <cmd>`. `helmfile lint` and CI are unaffected — they short-circuit the hooks with `HELMFILE_SKIP_CLUSTER_HOOKS=1`.
 
 Apply both releases at once:
 
@@ -84,7 +96,7 @@ helmfile destroy     # reverse → postuninstall hook also removes CRDs / namesp
 Most common scenario: re-apply only the cr release after editing `values/dev-cr.yaml`.
 
 ```bash
-# cr (Gateway / NginxProxy / ServiceMonitor) only
+# cr (Gateway / NginxProxy / ClientSettingsPolicy / PodMonitor) only
 helmfile --selector name=nginx-gateway-cr diff
 helmfile --selector name=nginx-gateway-cr apply
 
@@ -107,29 +119,24 @@ kubectl get gatewayclass
 kubectl get gateway -n nginx-gateway -o wide
 kubectl get svc -n nginx-gateway -o custom-columns=\
 NAME:.metadata.name,TYPE:.spec.type,IP:.status.loadBalancer.ingress[0].ip
+
+# ClientSettingsPolicy -- expect ACCEPTED=True.
+# A wrong targetRef still applies cleanly, so the status is the only signal.
+kubectl get clientsettingspolicy -n nginx-gateway -o custom-columns=\
+NAME:.metadata.name,TARGET:.spec.targetRef.name,\
+ACCEPTED:'.status.ancestors[0].conditions[?(@.type=="Accepted")].status'
 ```
 
 <br/>
 
-## Phase 1 Temporary IPs
+## LB IP placement (completed cutover record)
 
-All 11 Gateways use **temporary IPs** during Phase 1 so they are fully isolated from the live ingress-nginx. Cutover (Phase 6) swaps them for the real IPs.
+During Phase 1–5 all 11 Gateways ran on temporary IPs to stay isolated from the live ingress-nginx.
+**The cutover (Phase 6) completed on 2026-04-17 and every Gateway moved to its final IP**; the
+temporary range (`.76`–`.79`) was removed from the MetalLB pool at the same time.
 
-| GatewayClass | Phase 1 temp IP | Phase 6 real IP |
-|---|---|---|
-| ngf | 192.0.2.69 | 192.0.2.55 |
-| ngf-public-a | 192.0.2.70 | 192.0.2.56 |
-| ngf-public-b | 192.0.2.71 | 192.0.2.57 |
-| ngf-public-c | 192.0.2.72 | 192.0.2.58 |
-| ngf-public-d | 192.0.2.73 | 192.0.2.62 |
-| ngf-public-e | 192.0.2.74 | 192.0.2.63 |
-| ngf-public-f | 192.0.2.75 | 192.0.2.64 |
-| ngf-public-g | 192.0.2.76 | 192.0.2.65 |
-| ngf-public-h | 192.0.2.77 | 192.0.2.66 |
-| ngf-public-i | 192.0.2.78 | 192.0.2.67 |
-| ngf-public-j | 192.0.2.79 | 192.0.2.68 |
-
-No LB IP conflict with ingress-nginx → both can coexist throughout Phase 1-5.
+The per-Gateway IP is owned by `gateways[].loadBalancerIP` in [`values/dev-cr.yaml`](values/dev-cr.yaml)
+— read it there instead of copying the values into this document.
 
 <br/>
 
@@ -180,8 +187,8 @@ For the exact Gateway API version used, see `https://github.com/nginx/nginx-gate
 |---------|-----------|
 | `Gateway PROGRAMMED=False, ListenerInvalidCertificateRef` | Phase 1 has only HTTP listeners; n/a. After HTTPS is added in Phase 3+, verify the cert Secret |
 | `NginxProxy not found` | Confirm the `nginx-gateway-cr` release was applied. `kubectl get nginxproxy -n nginx-gateway` (expect 11) |
-| `LoadBalancer Service Pending` | Check MetalLB pool (`kubectl -n metallb get ipaddresspool`). Must contain the requested IP within `.55-58, .62-75` |
-| LB IP collision in Phase 1 | The IP is currently held by ingress-nginx. Switch to a temp IP (`.69-.75`) or scale down the conflicting ingress-nginx release first |
+| ClientSettingsPolicy settings do not reach nginx | The apply succeeds even when the policy is rejected. Check `status.ancestors[].conditions` via `kubectl get clientsettingspolicy -n nginx-gateway -o yaml` — `TargetNotFound` means a typo in `targetRef.name`, a conflict means two policies target the same object |
+| `LoadBalancer Service Pending` | Check the MetalLB pool (`kubectl -n metallb get ipaddresspool`). The requested IP must fall inside `ipAddressPools[].addresses` in `network/metallb/values/dev-metallb-cr.yaml` |
 | `helmfile.yaml.gotmpl` not recognized | Requires helmfile 0.140+. Check with `helmfile --version` |
 
 <br/>

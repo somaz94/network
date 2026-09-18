@@ -41,7 +41,7 @@ releases:
   - name: metallb-cr
     namespace: metallb
     chart: oci://ghcr.io/somaz94/charts/metallb-cr
-    version: "0.1.0"
+    version: "0.1.2"
     needs:
       - metallb/metallb
     values:

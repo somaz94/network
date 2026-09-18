@@ -2,7 +2,9 @@
 
 > **Status**: Active component. Manages the Route53 zone `example.com` for the `prod-example-app-v1` cluster (eu-central-1, account 123456789012). Authentication uses an EKS Pod Identity association (namespace `external-dns` / SA `external-dns`).
 
-Helmfile-managed deployment of [ExternalDNS](https://github.com/kubernetes-sigs/external-dns/) that synchronizes Kubernetes Service / Ingress hostnames into AWS Route53 records. Authentication is via an EKS Pod Identity association (no `role-arn` annotation on the SA).
+[ExternalDNS](https://github.com/kubernetes-sigs/external-dns/) synchronizes Kubernetes Service / Ingress hostnames into AWS Route53 records. Authentication is via an EKS Pod Identity association (no `role-arn` annotation on the SA).
+
+> **ArgoCD-managed**: both clusters are delivered by ArgoCD. The chart-version SSOT is `chart.version` in `argocd-aws/external-dns.yaml` (prod-example-app-v1) and `argocd-example-app-prod/external-dns.yaml` (example-app-prod); `upgrade.py` bumps **both** files together (`CONFIG.ARGOCD_PIN_FILES`) — the duplication is not drift, so never hand-edit only one. The helmfile section below is **bootstrap only**.
 
 <br/>
 
@@ -10,15 +12,21 @@ Helmfile-managed deployment of [ExternalDNS](https://github.com/kubernetes-sigs/
 
 ```
 external-dns-aws/
-├── Chart.yaml              # Version tracking only (no local templates)
-├── helmfile.yaml           # Helmfile release definition (upstream chart)
-├── values.yaml             # Upstream defaults (managed by upgrade.py)
-├── values.schema.json      # Values schema (shipped by upstream)
+├── Chart.yaml                    # Version tracking only (no local templates)
+├── argocd-aws/
+│   └── external-dns.yaml         # prod-example-app-v1 ArgoCD release metadata (chart-version SSOT, autoSync)
+├── argocd-example-app-prod/
+│   └── external-dns.yaml         # example-app-prod ArgoCD release metadata (chart-version SSOT, autoSync)
+├── helmfile.yaml.gotmpl          # 🔴 BOOTSTRAP-ONLY release definition (bringing up a new cluster)
+├── values.yaml                   # Upstream defaults (managed by upgrade.py)
+├── values.schema.json            # Values schema (shipped by upstream)
 ├── values/
-│   └── prod.yaml          # Operational values (domain filter, Pod Identity auth)
-├── upgrade.py              # Version bump script
-├── backup/                 # Auto-generated backups (rollback trail)
-└── README.md
+│   ├── prod.yaml                 # prod-example-app-v1 operational values (domain filter, Pod Identity auth)
+│   └── example-app-prod.yaml     # example-app-prod operational values (distinct txtOwnerId / annotation-filter)
+├── upgrade.py                    # Version bump script (bumps both marker pins together)
+├── backup/                       # Auto-generated backups (rollback trail)
+├── README.md
+└── README-en.md
 ```
 
 <br/>
@@ -30,23 +38,31 @@ external-dns-aws/
 - AWS Route53 hosted zone (`example.com` or per-environment domain)
 - IAM Role with `ChangeResourceRecordSets` / `ListResourceRecordSets` on the target zone, plus a Pod Identity trust policy (`pods.eks.amazonaws.com`)
 - A system nodegroup label (`nodegroup-workload=system` is used for placement)
+  - **Placement differs per cluster** — the above is `prod-example-app-v1`; on `example-app-prod` it is the Karpenter NodePool `platform` (label `nodegroup-workload=platform`, **taint `dedicated=platform:NoSchedule`**). A Karpenter pool scales where a managed node group did not, so it is tainted, and `values/example-app-prod.yaml` therefore sets a **toleration** as well as the selector.
 
 <br/>
 
 ## Quick Start
 
+ArgoCD owns the deployment. Merge the change and the Applications `infra-external-dns`
+(prod-example-app-v1) and `example-app-prod-infra-external-dns` (example-app-prod) pick it up — sync
+behaviour follows `autoSync` in each marker file.
+
 ```bash
-# Validate configuration
-helmfile lint
+kubectl get pods -n external-dns -l app.kubernetes.io/name=external-dns
+```
 
-# Preview changes
-helmfile diff
+### helmfile — bootstrap only
 
-# Deploy
-helmfile apply
+`helmfile.yaml.gotmpl` is used only when bringing up a **new cluster that has no ArgoCD yet** (something
+has to publish the DNS record for ArgoCD's own ingress first). The template reads `.Values.valuesFile`,
+which exists only under `environments.<env>`, so **always pass both `--kube-context` and `-e <env>`** — a
+bare invocation renders nil. Picking the wrong pair points a second external-dns at the same Route53 zone
+with the wrong ownership id.
 
-# Tear down
-helmfile destroy
+```bash
+helmfile --kube-context example-app-prod -e example-app-prod diff
+helmfile --kube-context example-app-prod -e example-app-prod apply
 ```
 
 <br/>
@@ -96,21 +112,22 @@ helmfile destroy
 ### After upgrading
 
 ```bash
-helmfile diff
-helmfile apply
+# upgrade.py rewrites chart.version in both marker files -> commit -> merge -> ArgoCD syncs
 kubectl get pods -n external-dns -l app.kubernetes.io/name=external-dns
 ```
 
 <br/>
 
-## Helmfile Commands Reference
+## ArgoCD Release Reference
+
+| Cluster | ArgoCD Application | Release metadata | Values |
+|---|---|---|---|
+| `prod-example-app-v1` | `infra-external-dns` | `argocd-aws/external-dns.yaml` | `values/prod.yaml` |
+| `example-app-prod` | `example-app-prod-infra-external-dns` | `argocd-example-app-prod/external-dns.yaml` | `values/example-app-prod.yaml` |
 
 ```bash
-helmfile lint           # Validate
-helmfile diff           # Preview
-helmfile apply          # Apply
-helmfile destroy        # Remove
-helmfile status         # Status
+argocd app get  infra-external-dns    # status
+argocd app diff infra-external-dns    # preview changes
 ```
 
 <br/>
