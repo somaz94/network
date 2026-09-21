@@ -1,0 +1,6 @@
+# find-sensitive.sh allowlist — reviewed 2026-09-21.
+# Every entry is an upstream chart example, a placeholder, a documentation address, or a
+# SealedSecret ciphertext; none is a live credential or real infrastructure address.
+# Format: <relative path><TAB><exact line text>. A new value in the same file is still reported.
+
+ingress-nginx/values.yaml	# - ip: 10.1.2.3
