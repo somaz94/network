@@ -1,8 +1,7 @@
 # NGINX Gateway Fabric controller customization.
 # Upstream defaults are kept; only necessary overrides listed here.
 #
-# Note: GatewayClass / Gateway / NginxProxy resources managed in manifests/
-# (applied via helmfile postsync hook), NOT here.
+# Gateway / NginxProxy CRs live in values/dev-cr.yaml (nginx-gateway-cr release), NOT here.
 
 nginxGateway:
   # default: "nginx" → our repo uses "ngf" to coexist with legacy ingress-nginx
@@ -14,9 +13,6 @@ nginxGateway:
   # default: true → opt out of product telemetry (privacy)
   productTelemetry:
     enable: false
-
-  # default log level is info; keep default.
-  # metrics: default enable=true, port=9113. No override needed.
 
 nginx:
   # chart default is 1; dev cluster matches legacy ingress-nginx convention

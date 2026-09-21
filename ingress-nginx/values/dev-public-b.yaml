@@ -3,24 +3,21 @@ global:
     # -- Registry host to pull images from.
     registry: registry.k8s.io
 controller:
-  # Enable annotation validations but allow snippet annotations
   enableAnnotationValidations: true
-  # Allow snippet annotations for custom configurations
   allowSnippetAnnotations: true
   # Set annotation risk level to Critical to allow snippet annotations (v1.12+)
   config:
     annotations-risk-level: "Critical"
   ingressClassResource:
-    name: nginx-public-b  # Distinct name for differentiation
+    name: nginx-public-b
     enabled: true
-    default: false     # Explicitly mark as non-default controller
-    controllerValue: "k8s.io/ingress-nginx-public-b"  # Distinct controllerValue for differentiation
+    default: false
+    controllerValue: "k8s.io/ingress-nginx-public-b"
   service:
     # -- Enable controller services or not. This does not influence the creation of either the admission webhook or the metrics service.
     enabled: true
     type: LoadBalancer
     loadBalancerIP: "192.0.2.57"
-  # ServiceMonitor (Prometheus metrics)
   metrics:
     enabled: true
     serviceMonitor:

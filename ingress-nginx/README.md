@@ -33,7 +33,7 @@ This directory is an archive, so rolling back means moving the directory back to
 
 Note: the MetalLB pool was narrowed after the cutover — the temporary range (`.76`–`.79`) was removed. The allocatable addresses are owned by `ipAddressPools[].addresses` in `../../metallb/values/dev-metallb-cr.yaml`; if a rollback needs temporary IPs, widen the range there first and then `helmfile apply`.
 
-### Cutover lessons captured at the time (automated by `../../nginx-gateway-fabric/cutover.sh`)
+### Cutover lessons captured at the time (automated at the time by a since-retired cutover script)
 
 - `kubectl scale --replicas=0` alone does not release the MetalLB IP → the Service must also be patched to `ClusterIP` with `spec.loadBalancerIP` removed.
 - Delete the `<release>-admission` ValidatingWebhookConfiguration upfront, otherwise Ingress UPDATE/DELETE (including ArgoCD pruning) times out on the dead admission endpoint.

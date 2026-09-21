@@ -17,7 +17,7 @@
 # leftover bootstrap release record, NOT evidence that the component is helmfile-owned. This is
 # the only component that carries BOTH a helmfile environment and an argocd-*/ marker, so the
 # usual "no marker = helmfile track" shortcut misreads it. Check for a marker directory, not
-# `helm list`. It matters during the cutover: the DNS ownership step (D-Day plan Step 7-3) is
+# `helm list`. It matters during the cutover: the DNS ownership step is
 # the one step that touches external-dns, and diagnosing it from `helm list` leads here by
 # mistake. Chart.yaml, both markers and the live release all carry the same pinned version, so an
 # accidental apply would be close to idempotent — but it would still contest ownership with

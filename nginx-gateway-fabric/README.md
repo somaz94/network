@@ -23,7 +23,6 @@ nginx-gateway-fabric/
 │   ├── values.schema.json       # JSON Schema — local IDE / CI validation
 │   └── upgrade.py               # cr-chart version-pin upgrade (driven separately from the root upgrade.py)
 ├── upgrade.py                   # NGF controller upgrade (external-oci, GitHub Releases API)
-├── cutover.sh                   # Operational script for the ingress-nginx → NGF cutover
 ├── docs/                        # Topic guides (KO + -en.md pairs) — see the Documentation table below
 ├── README.md / README-en.md
 └── backup/

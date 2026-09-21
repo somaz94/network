@@ -11,8 +11,8 @@
 # policy: upsert-only + a distinct txtOwnerId + a distinct annotation-filter -- read the header
 # of values/example-app-prod.yaml before touching any of those three.
 #
-# 🔴 Marker dir is `argocd-example-app-prod/`, disjoint from all four existing markers
-# (`argocd/`, `argocd-local/`, `argocd-aws/`, `argocd-local-aws/`): the generators all glob this
+# 🔴 Marker dir is `argocd-example-app-prod/`, disjoint from every other argocd*/ marker:
+# the generators all glob this
 # SAME repo and the generated app name `infra-<releaseName>` is shared across clusters. Full
 # rationale in the appset header.
 #

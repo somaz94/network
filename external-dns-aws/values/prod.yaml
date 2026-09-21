@@ -10,16 +10,11 @@ serviceAccount:
   # external-dns, in project/example-app/prod/pod-identity.tf), NOT IRSA. The pod-identity agent
   # injects credentials at admission; the SA needs no role annotation. The legacy IRSA role
   # (mgmt/user-role.tf external_dns_role) is retired as a follow-up.
-  #
-  # Pre-Pod-Identity IRSA config (kept commented for rollback):
-  # annotations:
-  #   eks.amazonaws.com/role-arn: arn:aws:iam::123456789012:role/external-dns-role
 
 # Pin to the system node group (label nodegroup-workload=system, ON_DEMAND, no taint)
 nodeSelector:
   nodegroup-workload: system
 
-# Pod security settings
 podSecurityContext:
   runAsNonRoot: true
   fsGroup: 65534
@@ -37,7 +32,6 @@ securityContext:
 rbac:
   create: true
 
-# Resource limits
 resources:
   requests:
     cpu: 50m
@@ -46,17 +40,11 @@ resources:
     cpu: 200m
     memory: 256Mi
 
-# Logging settings
 logLevel: info
 logFormat: text
 
-# # Monitor only the example-app namespace
-# namespaced: true
-
-# DNS update interval
 interval: 5m
 
-# Resource types to monitor
 sources:
   - service
   - ingress
@@ -73,11 +61,9 @@ txtPrefix: "external-dns-"
 domainFilters:
   - example.com
 
-# AWS Route53 provider
 provider:
   name: aws
 
-# External-DNS extra settings
 extraArgs:
   - --aws-zone-type=public
   - --aws-prefer-cname

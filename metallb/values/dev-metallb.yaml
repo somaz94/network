@@ -35,7 +35,7 @@ speaker:
 
 # -----------------------------------------------------------------------------
 # BGP backend — disabled because this cluster is L2-only.
-# `metallb-config.yaml` defines only `kind: L2Advertisement` (name: l2-network);
+# values/dev-metallb-cr.yaml defines only an L2Advertisement (l2-network);
 # no `BGPPeer` / `BGPAdvertisement` CRDs exist. Both the legacy `frr` sidecar
 # (deprecated in 0.16.0, removed by default) and the new `frr-k8s` daemonset
 # (new 0.16.0 default backend) are inactive in this cluster, so we keep them

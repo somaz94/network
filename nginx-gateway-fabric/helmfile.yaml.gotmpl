@@ -2,8 +2,8 @@
 #
 # Release topology (2026-04-17 refactor):
 #   1. nginx-gateway-fabric  — OCI upstream chart (NGF controller).
-#   2. nginx-gateway-cr      — local chart (./cr-chart) for 11 Gateway + 11 NginxProxy + ServiceMonitor
-#                              (absorbs the prior manifests/ dir into helm template → covered by helmfile diff).
+#   2. nginx-gateway-cr      — published somaz94/nginx-gateway-cr (Gateways, NginxProxies,
+#                              ClientSettingsPolicy, PodMonitor); version pinned in cr-chart/Chart.yaml.
 #
 # - Gateway API CRDs use the official standard-install.yaml (single YAML URL, no git clone).
 #   The Gateway API version pinned by NGF is auto-detected from the NGF repo kustomization.yaml via curl.
@@ -15,11 +15,10 @@
 #   helmfile apply   → prepare(CRDs) → release1 install → release2 install (cr-chart)
 #   helmfile destroy → prepare(CRDs; idempotent) → release2 uninstall → release1 uninstall
 #                      → postuninstall(remove CRDs + namespace).
-#   The previous postsync/preuninstall hooks (raw manifest apply/delete) are replaced by the cr-chart release.
 #
 # Single source of truth:
 #   - Chart.yaml          → NGF upstream chart version/appVersion.
-#   - cr-chart/Chart.yaml → cr-chart (Gateway/NginxProxy/ServiceMonitor) version pin.
+#   - cr-chart/Chart.yaml → nginx-gateway-cr version pin.
 
 {{- $chart := readFile "Chart.yaml" | fromYaml }}
 {{- $chartVersion := $chart.version }}
@@ -34,12 +33,8 @@ repositories:
   - name: somaz94
     url: https://charts.somaz.blog
 
-# Cap helm release history at 3 (helm's default is 10). Each release Secret stores the
-# full rendered manifest, so 10 revisions of a large chart make helm's history query
-# return several MB in a single response and the kube-apiserver stream aborts
-# ("stream error INTERNAL_ERROR" on EKS / "read: operation timed out" on-prem), which
-# breaks helmfile diff/apply entirely. 3 revisions still allows rollback.
-# See cicd/argo-cd/docs/helm-release-history-bloat.md.
+# historyMax 3: 10 revisions of a large chart overflow helm's history query on the
+# apiserver stream and break helmfile diff/apply. See cicd/argo-cd/docs/helm-release-history-bloat.md.
 helmDefaults:
   historyMax: 3
 
@@ -164,7 +159,7 @@ releases:
 
             echo "=== postuninstall done ==="
 
-  # Tenant-level CRs (Gateway/NginxProxy/ServiceMonitor).
+  # Tenant-level CRs (Gateway/NginxProxy/ClientSettingsPolicy/PodMonitor).
   # needs ensures CRDs + controller are ready before apply → ordering guaranteed.
   - name: nginx-gateway-cr
     namespace: nginx-gateway

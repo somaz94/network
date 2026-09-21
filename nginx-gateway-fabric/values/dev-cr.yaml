@@ -6,10 +6,6 @@
 # Chart source pinned in helmfile.yaml.gotmpl. To customize the chart itself
 # (templates / values schema / new fields), fork charts/nginx-gateway-cr/ from
 # https://github.com/somaz94/helm-charts and update the helmfile to point at the fork.
-#
-# Cutover/IP swap is completed by editing the loadBalancerIP line and running `helmfile apply`.
-#
-# Current state reflects real IP placement after Phase 6 cutover (2026-04-17).
 
 # ---------------------------------------------------------------------------
 # NginxProxy defaults
@@ -17,9 +13,7 @@
 # Common NginxProxy config (applied to all 11 proxies; per-gateway override
 # possible under gateways[].proxy if needed).
 #
-# externalTrafficPolicy: Cluster ensures kube-proxy forwards across all nodes when an
-# internal pod calls the LB IP.
-# (Changed from Local to Cluster during Phase 6 regression fix on 2026-04-17; see Plan issue 7.)
+# Cluster, not Local: in-cluster callers of an LB IP need kube-proxy to forward across nodes (changed 2026-04-17).
 proxy:
   replicas: 1
   service:

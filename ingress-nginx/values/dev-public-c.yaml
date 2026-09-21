@@ -4,17 +4,16 @@ global:
     registry: registry.k8s.io
 controller:
   ingressClassResource:
-    name: nginx-public-c  # Distinct name for differentiation
+    name: nginx-public-c
     enabled: true
-    default: false     # Explicitly mark as non-default controller
-    controllerValue: "k8s.io/ingress-nginx-public-c"  # Distinct controllerValue for differentiation
+    default: false
+    controllerValue: "k8s.io/ingress-nginx-public-c"
   service:
     # -- Enable controller services or not. This does not influence the creation of either the admission webhook or the metrics service.
     enabled: true
     type: LoadBalancer
     loadBalancerIP: "192.0.2.58"
 
-  # ServiceMonitor (Prometheus metrics)
   metrics:
     enabled: true
     serviceMonitor:
