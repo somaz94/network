@@ -1,10 +1,8 @@
 global:
   image:
-    # -- Registry host to pull images from.
     registry: registry.k8s.io
 controller:
   service:
-    # -- Enable controller services or not. This does not influence the creation of either the admission webhook or the metrics service.
     enabled: true
     type: LoadBalancer
     loadBalancerIP: "192.0.2.55"

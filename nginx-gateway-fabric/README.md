@@ -56,7 +56,7 @@ Each release's chart version comes from a local `Chart.yaml`, read via `readFile
 
 | Topic | Document |
 |---|---|
-| TLS wildcard certificate setup (self-signed, 10 years) | [docs/tls-wildcard-setup-en.md](docs/tls-wildcard-setup.md) |
+| TLS wildcard certificate setup (self-signed, 10 years) | [docs/tls-wildcard-setup.md](docs/tls-wildcard-setup.md) |
 
 <br/>
 
@@ -79,7 +79,7 @@ Each release's chart version comes from a local `Chart.yaml`, read via `readFile
 export KUBE_CONTEXT="<target>"   # list candidates: kubectl config get-contexts -o name
 ```
 
-Run the commands below as `helmfile --kube-context "$KUBE_CONTEXT" <cmd>`. `helmfile lint` and CI are unaffected — they short-circuit the hooks with `HELMFILE_SKIP_CLUSTER_HOOKS=1`.
+Run the commands below as `helmfile --kube-context "$KUBE_CONTEXT" <cmd>`. `helmfile lint` short-circuits the hooks with `HELMFILE_SKIP_CLUSTER_HOOKS=1`. CI does not — `diff:components` runs them with `KUBE_CONTEXT=onprem-dev` on every MR that touches this component, so an MR diff alone already applies the CRDs; the post-merge `deploy:wave_*` apply runs them too.
 
 Apply both releases at once:
 

@@ -3,9 +3,9 @@
 # Section order mirrors `cr-chart/values.yaml` for cross-reference.
 # Only sections we override are present here; others fall back to chart defaults.
 #
-# Chart source pinned in helmfile.yaml.gotmpl. To customize the chart itself
-# (templates / values schema / new fields), fork charts/nginx-gateway-cr/ from
-# https://github.com/somaz94/helm-charts and update the helmfile to point at the fork.
+# Chart version pinned in cr-chart/Chart.yaml (read by helmfile.yaml.gotmpl). To customize
+# the chart itself, fork charts/nginx-gateway-cr/ from https://github.com/somaz94/helm-charts
+# and update the helmfile to point at the fork.
 
 # ---------------------------------------------------------------------------
 # NginxProxy defaults

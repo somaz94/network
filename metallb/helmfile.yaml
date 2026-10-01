@@ -4,9 +4,7 @@
 #   1. metallb     — upstream metallb/metallb chart (controller, speaker, CRDs).
 #   2. metallb-cr  — somaz94/metallb-cr chart, renders the IPAddressPool + L2Advertisement config CRs.
 #
-# The upstream chart does not template config CRs, so these were previously applied
-# out-of-band via a postsync `kubectl apply -f metallb-config.yaml` hook. metallb-cr
-# replaces that hook, so the config is a declarative, version-pinned helmfile release.
+# The upstream chart does not template config CRs; metallb-cr ships them as a pinned release.
 #
 # Chart versions pinned. Bump the upstream chart via ./upgrade.py after verifying the release.
 

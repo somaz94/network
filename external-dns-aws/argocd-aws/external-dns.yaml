@@ -17,7 +17,7 @@ syncWave: "1"                                   # core networking tier (reachabi
 chart:
   repoURL: https://kubernetes-sigs.github.io/external-dns/
   name: external-dns
-  version: "1.21.1"
+  version: "1.22.0"
 valueFile: network/external-dns-aws/values/prod.yaml  # repo-root-relative; pulled via the kuberntes-infra $values multi-source ref
 createNamespace: false                          # 'external-dns' already exists
 autoSync: true                                  # adopt-diff verified clean (tracking-id annotations only; Deployment gen bumped, RS revision unchanged, pod 0-restart) -> auto-sync (prune+selfHeal) on

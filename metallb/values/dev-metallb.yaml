@@ -28,19 +28,11 @@ speaker:
       operator: Equal
       value: ci-build
       effect: NoSchedule
-  # Explicit pin matching 0.16.0 default (legacy frr sidecar removed from speaker pods).
-  # This cluster is L2-only — `frr` and `frr-k8s` are inactive code paths (see comment below).
   frr:
     enabled: false
 
 # -----------------------------------------------------------------------------
-# BGP backend — disabled because this cluster is L2-only.
-# values/dev-metallb-cr.yaml defines only an L2Advertisement (l2-network);
-# no `BGPPeer` / `BGPAdvertisement` CRDs exist. Both the legacy `frr` sidecar
-# (deprecated in 0.16.0, removed by default) and the new `frr-k8s` daemonset
-# (new 0.16.0 default backend) are inactive in this cluster, so we keep them
-# both off to avoid an idle frr-k8s daemonset on every node.
-# Re-enable only when BGP peers are introduced (`BGPPeer` / `BGPAdvertisement` CRDs).
+# L2-only (no BGPPeer): keep both frr sidecar and frr-k8s off; re-enable only with BGP peers.
 # -----------------------------------------------------------------------------
 frrk8s:
   enabled: false

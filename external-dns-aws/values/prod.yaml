@@ -9,7 +9,7 @@ serviceAccount:
   # (Terraform aws_eks_pod_identity_association.external_dns, namespace external-dns / SA
   # external-dns, in project/example-app/prod/pod-identity.tf), NOT IRSA. The pod-identity agent
   # injects credentials at admission; the SA needs no role annotation. The legacy IRSA role
-  # (mgmt/user-role.tf external_dns_role) is retired as a follow-up.
+  # is retired (terraform-infra-aws mgmt/_deprecated/user-role-irsa.tf.bak).
 
 # Pin to the system node group (label nodegroup-workload=system, ON_DEMAND, no taint)
 nodeSelector:
@@ -49,10 +49,9 @@ sources:
   - service
   - ingress
 
-# DNS record management policy: create if record does not exist, update if it does
+# Never delete records (see example-app-prod.yaml header: two instances share the zone).
 policy: upsert-only
 
-# TXT record registry settings (ownership markers)
 registry: txt
 txtOwnerId: "example-app-external-dns"
 txtPrefix: "external-dns-"

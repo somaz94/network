@@ -34,7 +34,7 @@ syncWave: "1"                                   # core networking tier (reachabi
 chart:
   repoURL: https://kubernetes-sigs.github.io/external-dns/
   name: external-dns
-  version: "1.21.1"
+  version: "1.22.0"
 valueFile: network/external-dns-aws/values/example-app-prod.yaml  # repo-root-relative; pulled via the kuberntes-infra $values multi-source ref
 createNamespace: false                          # 'external-dns' already exists
 autoSync: true                                  # adopt-diff verified 2026-08-31: the chart rendered from this file's pin + valueFile is IDENTICAL to the live helmfile release manifest, so the sync applied tracking-id annotations only -- same pod name/UID, 0 restarts, one ReplicaSet still at rollout revision 1 (Deployment metadata.generation 1->2 without a rollout). Auto-sync (prune+selfHeal) on.
