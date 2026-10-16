@@ -1,21 +1,9 @@
 annotations:
   artifacthub.io/changes: |-
-    - kind: added
-      description: "Add value .service.enabled to enable the creation of the Kubernetes service."
-    - kind: added
-      description: "Add value replicaCount to set the number of external-dns replicas (bounded to 0 or 1, since external-dns does not support leader election)."
-    - kind: added
-      description: "Add crd as a valid registry value and grant the matching RBAC on dnsrecords for the CRD registry."
-    - kind: added
-      description: "Add value hostAliases to inject entries into the Pod's /etc/hosts, for reaching a provider or webhook by a hostname that cluster DNS cannot resolve."
     - kind: changed
-      description: "Breaking: policy no longer defaults to upsert-only and is now required. You must set policy explicitly to one of create-only, sync, or upsert-only."
-    - kind: changed
-      description: "Update ExternalDNS OCI image version to v0.22.0."
-    - kind: fixed
-      description: "RBAC compliance checkbox for dnsendpoints/status #6442 @vflaux."
+      description: "Update ExternalDNS OCI image version to v0.23.0."
 apiVersion: v2
-appVersion: 0.22.0
+appVersion: 0.23.0
 description: ExternalDNS synchronizes exposed Kubernetes Services and Ingresses with
   DNS providers.
 home: https://github.com/kubernetes-sigs/external-dns/
@@ -36,5 +24,5 @@ name: external-dns
 sources:
 - https://github.com/kubernetes-sigs/external-dns/
 type: application
-version: 1.22.0
+version: 1.23.0
 
