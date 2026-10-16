@@ -16,8 +16,7 @@ metallb/
 │   └── dev-metallb-cr.yaml     # IPAddressPool + L2Advertisement config (somaz94/metallb-cr chart)
 ├── upgrade.py                  # Version upgrade script
 ├── backup/                     # Auto-backup on upgrade
-├── README.md                   # Korean documentation
-└── README-en.md                # English documentation
+└── README.md
 ```
 
 The upstream `metallb/metallb` chart does not template config CRs, so the

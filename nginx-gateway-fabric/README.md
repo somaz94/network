@@ -24,7 +24,7 @@ nginx-gateway-fabric/
 │   └── upgrade.py               # cr-chart version-pin upgrade (driven separately from the root upgrade.py)
 ├── upgrade.py                   # NGF controller upgrade (external-oci, GitHub Releases API)
 ├── docs/                        # Topic guides (KO + -en.md pairs) — see the Documentation table below
-├── README.md / README-en.md
+├── README.md
 └── backup/
 ```
 

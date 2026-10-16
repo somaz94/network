@@ -25,8 +25,7 @@ external-dns-aws/
 │   └── example-app-prod.yaml     # example-app-prod operational values (distinct txtOwnerId / annotation-filter)
 ├── upgrade.py                    # Version bump script (bumps both marker pins together)
 ├── backup/                       # Auto-generated backups (rollback trail)
-├── README.md
-└── README-en.md
+└── README.md
 ```
 
 <br/>
