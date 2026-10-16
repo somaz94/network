@@ -61,8 +61,8 @@ Expected output:
 ```
 subject=CN=*.example.com, O=example, C=KR
 issuer=CN=*.example.com, O=example, C=KR  (self-signed)
-notBefore=Apr 17 03:02:09 2026 GMT
-notAfter=Apr 14 03:02:09 2036 GMT
+notBefore=<issue date> GMT
+notAfter=<issue date + 3650 days> GMT
 X509v3 Subject Alternative Name:
     DNS:example.com, DNS:*.example.com
 ```
