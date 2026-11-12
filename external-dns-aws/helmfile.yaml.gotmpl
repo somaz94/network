@@ -1,8 +1,6 @@
 # external-dns — Route53 record sync.
 #
-# 🔴 BOOTSTRAP ONLY. On prod-example-app-v1 this component is delivered by ArgoCD
-# (argocd-aws/external-dns.yaml, values/prod.yaml) and this helmfile is not used for it.
-# It exists for the other case: bringing up a NEW cluster, where ArgoCD does not exist yet
+# 🔴 BOOTSTRAP ONLY. It exists for bringing up a NEW cluster, where ArgoCD does not exist yet
 # and something has to publish the DNS record for ArgoCD's own ingress. Once that cluster's
 # ArgoCD is running, this release is adopted onto the pull track like every other component
 # and this file goes back to being unused.
@@ -19,7 +17,7 @@
 # usual "no marker = helmfile track" shortcut misreads it. Check for a marker directory, not
 # `helm list`. It matters during the cutover: the DNS ownership step is
 # the one step that touches external-dns, and diagnosing it from `helm list` leads here by
-# mistake. Chart.yaml, both markers and the live release all carry the same pinned version, so an
+# mistake. Chart.yaml, the marker and the live release all carry the same pinned version, so an
 # accidental apply would be close to idempotent — but it would still contest ownership with
 # ArgoCD's selfHeal.
 #

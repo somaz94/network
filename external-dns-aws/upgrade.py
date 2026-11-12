@@ -15,10 +15,8 @@ CONFIG = {
     "CHANGELOG_URL":  "https://github.com/kubernetes-sigs/external-dns/releases",
     "CHART_TYPE":     "external",  # "local" or "external"
     # ArgoCD-managed: version SSOT is the argocd metadata chart.version (the helmfile here is
-    # bootstrap-only). TWO files during the workload migration -- one per cluster, each with its
-    # own valueFile -- and both must move together or the clusters drift onto different charts.
+    # bootstrap-only).
     "ARGOCD_PIN_FILES": [
-        "argocd-aws/external-dns.yaml",
         "argocd-example-app-prod/external-dns.yaml",
     ],
 }

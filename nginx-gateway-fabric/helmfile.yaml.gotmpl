@@ -118,12 +118,10 @@ releases:
             set +e
             echo "=== postuninstall hook: removing CRDs + namespace ==="
             # Same kube-context gap as the prepare hook above -- helmfile does not
-            # pass --kube-context into a hook. It matters far more here: the standard
-            # Gateway API CRDs deleted below are SHARED with the AWS cluster, whose
-            # aws-load-balancer-controller installs the same standard-install.yaml.
-            # Deleting a CRD cascades to every CR of that kind, so a wrong context
-            # takes out the other cluster's Gateways and HTTPRoutes -- and `set +e`
-            # above means nothing would stop or report it.
+            # pass --kube-context into a hook. It matters far more here: deleting a
+            # CRD cascades to every CR of that kind, so a wrong context takes out
+            # another cluster's Gateways and HTTPRoutes -- and `set +e` above means
+            # nothing would stop or report it.
             if [ -z "${KUBE_CONTEXT:-}" ]; then
             # NOTE: these go to stdout, not stderr -- helmfile's `showlogs` only
             # relays a hook's stdout, so a message on stderr is swallowed and the
