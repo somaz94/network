@@ -164,10 +164,12 @@ openssl x509 -in wildcard.crt -noout -ext subjectAltName
 ```bash
 kubectl -n nginx-gateway create secret tls wildcard-example-tls \
   --cert=wildcard.crt --key=wildcard.key \
-  --dry-run=client -o yaml | kubectl apply -f -
+  --dry-run=client -o yaml \
+  | kubeseal --controller-namespace sealed-secrets --controller-name sealed-secrets \
+      --scope strict --format yaml > wildcard-example-tls-sealedsecret.yaml
 ```
 
-The NGF data plane detects the Secret change and reloads nginx config automatically.
+Commit the sealed file over `secret/nginx-gateway-tls/wildcard-example-tls-sealedsecret.yaml` in `argocd-applicationset`; `infra-sealedsecret-applicationset` delivers it and the controller updates the Secret. Do not overwrite the plaintext Secret with `kubectl apply` — the Secret is owned by the SealedSecret, so it would disagree with the sealed value in git. The NGF data plane detects the Secret change and reloads nginx config automatically.
 
 ### Step 3 — Add a listener to the Gateway
 
@@ -241,13 +243,15 @@ For any additional subdomain zone, repeat the same pattern:
 ## Renewal Procedure (after 10 years)
 
 1. Re-run the "Certificate Generation" step above → new `wildcard.crt` / `wildcard.key`
-2. Replace the existing Secret:
+2. Seal the new Secret and commit it over the one in `argocd-applicationset` `secret/nginx-gateway-tls/` (same as "Step 2 — Replace the Secret" above):
    ```bash
    kubectl -n nginx-gateway create secret tls wildcard-example-tls \
      --cert=wildcard.crt --key=wildcard.key \
-     --dry-run=client -o yaml | kubectl apply -f -
+     --dry-run=client -o yaml \
+     | kubeseal --controller-namespace sealed-secrets --controller-name sealed-secrets \
+         --scope strict --format yaml > wildcard-example-tls-sealedsecret.yaml
    ```
-3. The NGF data plane detects the Secret change and reloads nginx config (a few seconds)
+3. `infra-sealedsecret-applicationset` delivers it → the controller updates the Secret → the NGF data plane detects the change and reloads nginx config (a few seconds)
 4. No Gateway/app changes needed
 
 <br/>
